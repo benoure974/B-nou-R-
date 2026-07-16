@@ -1,0 +1,93 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Playfair+Display:ital,wght@0,500;0,700;1,400&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Space Grotesk", sans-serif;
+  --font-serif: "Playfair Display", Georgia, serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+/* Custom transitions and scrollbar layouts */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #081619;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #122428;
+  border-radius: 9999px;
+  border: 1px solid #c5a05920;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #0c7a7a;
+}
+
+/* CSS Keyframe Animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.99) translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-4px); }
+  75% { transform: translateX(4px); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-shake {
+  animation: shake 0.2s ease-in-out 2;
+}
+
+/* Print CSS Styles - guarantees flawless PDF representation of Convocations / Attendance sheets */
+@media print {
+  body {
+    background-color: white !important;
+    color: black !important;
+    font-family: Georgia, serif !important;
+  }
+  
+  /* Hide the web UI elements during native print operation */
+  header,
+  footer,
+  button,
+  .print\:hidden {
+    display: none !important;
+  }
+  
+  .print-document {
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    background-color: white !important;
+    color: black !important;
+  }
+
+  table {
+    border-collapse: collapse !important;
+    width: 100% !important;
+  }
+
+  th, td {
+    border: 1px solid #333 !important;
+    color: black !important;
+    background-color: white !important;
+  }
+}

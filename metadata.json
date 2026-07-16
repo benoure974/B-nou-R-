@@ -1,0 +1,8 @@
+{
+  "name": "Copy of Remix: RL Bénou Ré",
+  "description": "Application privée de gestion pour la Respectable Loge Bénou Ré (Rite Ancien et Primitif de Memphis-Misraïm)",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
