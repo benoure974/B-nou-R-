@@ -24,6 +24,25 @@ import { Session, Member, Visitor } from '../types';
 import SignaturePad from './SignaturePad';
 import { getSessionChronoFromFirestore, incrementSessionChronoInFirestore } from '../lib/firebaseSync';
 
+const visitorPositions = [
+  "Simple Visiteur",
+  "À l'Orient",
+  "Colonne du Nord",
+  "Colonne du Midi",
+  "Vénérable Maître",
+  "1er Surveillant",
+  "2e Surveillant",
+  "Secrétaire",
+  "Orateur",
+  "Trésorier",
+  "Hospitalier",
+  "Expert",
+  "Maître des Cérémonies",
+  "Couvreur",
+  "Maître de Musique (Harmoniste)",
+  "Maître des Banquets"
+];
+
 interface SessionsListProps {
   currentUser: Member;
   sessions: Session[];
@@ -50,9 +69,21 @@ export default function SessionsList({
   const [showSignatureForId, setShowSignatureForId] = useState<string | null>(null);
   const [showMemberAppel, setShowMemberAppel] = useState(false);
   const [showVisitorSelector, setShowVisitorSelector] = useState(false);
+  const [tempRoles, setTempRoles] = useState<Record<string, string>>({});
   const [pdfTypeToShow, setPdfTypeToShow] = useState<'convocation' | 'invitation' | 'presence' | null>(null);
   const [isShowingEmargement, setIsShowingEmargement] = useState(false);
   const [localTronc, setLocalTronc] = useState<number>(0);
+  const [deleteConfirmationId, setDeleteConfirmationId] = useState<string | null>(null);
+  const [validateConfirmationSession, setValidateConfirmationSession] = useState<Session | null>(null);
+
+  // Email sending states
+  const [editorTab, setEditorTab] = useState<'config' | 'email'>('config');
+  const [selectedEmailMembers, setSelectedEmailMembers] = useState<string[]>([]);
+  const [selectedEmailVisitors, setSelectedEmailVisitors] = useState<string[]>([]);
+  const [emailSubject, setEmailSubject] = useState('');
+  const [emailBody, setEmailBody] = useState('');
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
+  const [emailSentSuccess, setEmailSentSuccess] = useState(false);
 
   // PDF customizer states
   const [sessionNumber, setSessionNumber] = useState('2°');
@@ -153,6 +184,48 @@ export default function SessionsList({
       setInvitationMainLine(`${sessionNumber} TENUE REGULIERE au ${degreeFr} qui se déroulera au ${selectedSession.location || 'Temple Thérèse Eliseman à Saint-Pierre'} :`);
     }
   }, [sessionNumber]);
+
+  // Reset email states when PDF preview is toggled
+  React.useEffect(() => {
+    setEditorTab('config');
+    setSelectedEmailMembers([]);
+    setSelectedEmailVisitors([]);
+    setEmailSentSuccess(false);
+    setIsSendingEmail(false);
+    setEmailSubject('');
+    setEmailBody('');
+  }, [pdfTypeToShow]);
+
+  const handleSelectAllByDegree = () => {
+    if (!selectedSession) return;
+    const targetDegree = selectedSession.degree;
+    
+    // Select active members whose grade matches or exceeds the required degree of the tenue
+    const allowedMembers = members.filter(m => {
+      if (m.status !== 'Actif') return false;
+      
+      if (targetDegree === 'Apprenti') {
+        return true;
+      } else if (targetDegree === 'Compagnon') {
+        return m.grade === 'Compagnon' || m.grade === 'Maitre';
+      } else if (targetDegree === 'Maitre') {
+        return m.grade === 'Maitre';
+      }
+      return false;
+    });
+    
+    setSelectedEmailMembers(allowedMembers.map(m => m.id));
+  };
+
+  const handleSendInvitationByEmail = () => {
+    if (selectedEmailMembers.length === 0 && selectedEmailVisitors.length === 0) return;
+    setIsSendingEmail(true);
+    
+    setTimeout(() => {
+      setIsSendingEmail(false);
+      setEmailSentSuccess(true);
+    }, 2000);
+  };
 
   const [saveSuccess, setSaveSuccess] = useState(false);
 
@@ -319,10 +392,29 @@ export default function SessionsList({
   };
 
   const handleDelete = (id: string) => {
-    if (window.confirm('Voulez-vous vraiment supprimer cette tenue ?')) {
-      onDeleteSession(id);
+    setDeleteConfirmationId(id);
+  };
+
+  const confirmDelete = () => {
+    if (deleteConfirmationId) {
+      onDeleteSession(deleteConfirmationId);
+      setDeleteConfirmationId(null);
       setSelectedSession(null);
       setIsEditing(false);
+    }
+  };
+
+  const confirmValidation = async () => {
+    if (validateConfirmationSession) {
+      const updated: Session = {
+        ...validateConfirmationSession,
+        isValidated: true,
+        plancheValidated: true
+      };
+      await incrementSessionChronoInFirestore();
+      onUpdateSession(updated);
+      setSelectedSession(updated);
+      setValidateConfirmationSession(null);
     }
   };
 
@@ -374,19 +466,35 @@ export default function SessionsList({
     setSelectedSession(updated);
   };
 
-  const handleAddVisitorToSession = (visitorId: string) => {
+  const handleAddVisitorToSession = (visitorId: string, role: string) => {
     if (!selectedSession) return;
     const vIds = [...selectedSession.visitorIds];
     if (!vIds.includes(visitorId)) {
       vIds.push(visitorId);
     }
-    const updated = {
+    const roles = { ...(selectedSession.visitorRoles || {}) };
+    roles[visitorId] = role;
+
+    const updated: Session = {
       ...selectedSession,
-      visitorIds: vIds
+      visitorIds: vIds,
+      visitorRoles: roles
     };
     onUpdateSession(updated);
     setSelectedSession(updated);
     setShowVisitorSelector(false);
+  };
+
+  const handleUpdateVisitorRole = (visitorId: string, role: string) => {
+    if (!selectedSession) return;
+    const roles = { ...(selectedSession.visitorRoles || {}) };
+    roles[visitorId] = role;
+    const updated: Session = {
+      ...selectedSession,
+      visitorRoles: roles
+    };
+    onUpdateSession(updated);
+    setSelectedSession(updated);
   };
 
   const handleRemoveVisitorFromSession = (visitorId: string) => {
@@ -567,6 +675,7 @@ export default function SessionsList({
                             <tr className="bg-gray-100 text-black">
                               <th className="border border-gray-300 p-2">Nom & Prénom</th>
                               <th className="border border-gray-300 p-2">Loge & Orient</th>
+                              <th className="border border-gray-300 p-2">Office / Fonction</th>
                               <th className="border border-gray-300 p-2 w-40">Signature Émargement</th>
                             </tr>
                           </thead>
@@ -575,6 +684,7 @@ export default function SessionsList({
                               <tr key={v.id} className="text-black">
                                 <td className="border border-gray-300 p-2 font-semibold">{v.firstName} {v.lastName}</td>
                                 <td className="border border-gray-300 p-2 text-gray-600">{v.lodge} ({v.orient})</td>
+                                <td className="border border-gray-300 p-2 text-gray-600">{(selectedSession.visitorRoles?.[v.id]) || v.function || 'Visiteur'}</td>
                                 <td className="border border-gray-300 p-1 h-12 relative">
                                   {selectedSession.signatures[v.id] ? (
                                     <img src={selectedSession.signatures[v.id]} alt="sig" className="max-h-full mx-auto object-contain max-w-[120px]" referrerPolicy="no-referrer" />
@@ -610,292 +720,579 @@ export default function SessionsList({
               // Convocation & Invitation split view
               <div className="grid grid-cols-1 lg:grid-cols-12 flex-grow overflow-hidden print:block">
                 
-                {/* LEFT PANEL: CONFIGURATION CONTROLS */}
-                <div className="lg:col-span-5 border-r border-[#1e2e38] p-5 overflow-y-auto space-y-5 bg-[#122428]/40 print:hidden flex flex-col justify-between">
-                  <div className="space-y-4">
-                    <div className="border-b border-amber-500/10 pb-2">
-                      <span className="text-xs font-mono text-amber-500 uppercase tracking-widest font-bold">1. En-tête & Lieu</span>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1">
-                        <label className="text-[11px] text-[#87A0A0] uppercase tracking-wider block">N° de Tenue</label>
-                        <input
-                          type="text"
-                          value={sessionNumber}
-                          onChange={(e) => setSessionNumber(e.target.value)}
-                          className="w-full bg-[#081619] border border-[#87A0A0]/20 rounded-lg px-3 py-2 text-xs text-white focus:border-[#C5A059] focus:outline-none"
-                        />
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className="text-[11px] text-[#87A0A0] uppercase tracking-wider block">Heure d'ouverture</label>
-                        <input
-                          type="text"
-                          value={openingTime}
-                          onChange={(e) => setOpeningTime(e.target.value)}
-                          className="w-full bg-[#081619] border border-[#87A0A0]/20 rounded-lg px-3 py-2 text-xs text-white focus:border-[#C5A059] focus:outline-none"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="text-[11px] text-[#87A0A0] uppercase tracking-wider block">Date de Tenue (Texte de l'En-tête)</label>
-                      <input
-                        type="text"
-                        value={formattedHeaderDate}
-                        onChange={(e) => setFormattedHeaderDate(e.target.value)}
-                        className="w-full bg-[#081619] border border-[#87A0A0]/20 rounded-lg px-3 py-2 text-xs text-white focus:border-[#C5A059] focus:outline-none"
-                      />
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="text-[11px] text-[#87A0A0] uppercase tracking-wider block">Formule principale d'invitation</label>
-                      <textarea
-                        value={invitationMainLine}
-                        onChange={(e) => setInvitationMainLine(e.target.value)}
-                        rows={2}
-                        className="w-full bg-[#081619] border border-[#87A0A0]/20 rounded-lg px-3 py-2 text-xs text-white focus:border-[#C5A059] focus:outline-none resize-none"
-                      />
-                    </div>
-
-                    <div className="border-b border-amber-500/10 pb-2 pt-2">
-                      <span className="text-xs font-mono text-amber-500 uppercase tracking-widest font-bold">2. Calendrier Égyptien & VM</span>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1">
-                        <label className="text-[11px] text-[#87A0A0] uppercase tracking-wider block">Nom de Divinité</label>
-                        <input
-                          type="text"
-                          value={deityName}
-                          onChange={(e) => setDeityName(e.target.value)}
-                          className="w-full bg-[#081619] border border-[#87A0A0]/20 rounded-lg px-3 py-2 text-xs text-white focus:border-[#C5A059] focus:outline-none"
-                        />
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className="text-[11px] text-[#87A0A0] uppercase tracking-wider block">An de la Lumière</label>
-                        <input
-                          type="text"
-                          value={egyptianYear}
-                          onChange={(e) => setEgyptianYear(e.target.value)}
-                          className="w-full bg-[#081619] border border-[#87A0A0]/20 rounded-lg px-3 py-2 text-xs text-white focus:border-[#C5A059] focus:outline-none"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="text-[11px] text-[#87A0A0] uppercase tracking-wider block">Vénérable Maître (Signature/Fermeture)</label>
-                      <input
-                        type="text"
-                        value={vmName}
-                        onChange={(e) => setVmName(e.target.value)}
-                        className="w-full bg-[#081619] border border-[#87A0A0]/20 rounded-lg px-3 py-2 text-xs text-white focus:border-[#C5A059] focus:outline-none"
-                      />
-                    </div>
-
-                    <div className="border-b border-amber-500/10 pb-2 pt-2">
-                      <span className="text-xs font-mono text-amber-500 uppercase tracking-widest font-bold">3. Ordre du Jour (Feuille de Saisie)</span>
-                    </div>
-
-                    <div className="space-y-3">
-                      {/* Ligne 1 - Fixe/Auto */}
-                      <div className="bg-[#081619] border border-amber-500/5 rounded-lg p-2.5 space-y-1">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[10px] text-amber-500/80 font-mono font-bold">LIGNE 1 — AUTOMATIQUE</span>
-                          <span className="text-[9px] bg-amber-500/10 text-amber-400 px-1.5 py-0.5 rounded font-mono">Lecture seule</span>
-                        </div>
-                        <p className="text-xs text-gray-400 font-serif leading-snug">
-                          1. <span className="text-amber-300 font-semibold">{openingTime}</span> Ouverture des Travaux au {selectedSession.degree === 'Apprenti' ? "1er Degré" : selectedSession.degree === 'Compagnon' ? "2ème Degré" : "3ème Degré"} symbolique par le V∴M∴ <span className="text-amber-300 font-semibold">{vmName}</span>
-                        </p>
-                      </div>
-
-                      {/* Ligne 2 - Fixe */}
-                      <div className="bg-[#081619] border border-amber-500/5 rounded-lg p-2.5 space-y-1 opacity-75">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[10px] text-gray-500 font-mono font-bold">LIGNE 2 — TEMPLATE FIXE</span>
-                          <span className="text-[9px] bg-gray-500/10 text-gray-400 px-1.5 py-0.5 rounded font-mono">Lecture seule</span>
-                        </div>
-                        <p className="text-xs text-gray-400 font-serif leading-snug">
-                          2. Appel des FF et SS ∴ de la loge.
-                        </p>
-                      </div>
-
-                      {/* Ligne 3 - Fixe */}
-                      <div className="bg-[#081619] border border-amber-500/5 rounded-lg p-2.5 space-y-1 opacity-75">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[10px] text-gray-500 font-mono font-bold">LIGNE 3 — TEMPLATE FIXE</span>
-                          <span className="text-[9px] bg-gray-500/10 text-gray-400 px-1.5 py-0.5 rounded font-mono">Lecture seule</span>
-                        </div>
-                        <p className="text-xs text-gray-400 font-serif leading-snug">
-                          3. Lecture de la planche tracée de nos derniers travaux au {selectedSession.degree === 'Apprenti' ? "1er Degré" : selectedSession.degree === 'Compagnon' ? "2ème Degré" : "3ème Degré"} symbolique.
-                        </p>
-                      </div>
-
-                      {/* Ligne 4 - Fixe */}
-                      <div className="bg-[#081619] border border-amber-500/5 rounded-lg p-2.5 space-y-1 opacity-75">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[10px] text-gray-500 font-mono font-bold">LIGNE 4 — TEMPLATE FIXE</span>
-                          <span className="text-[9px] bg-gray-500/10 text-gray-400 px-1.5 py-0.5 rounded font-mono">Lecture seule</span>
-                        </div>
-                        <p className="text-xs text-gray-400 font-serif leading-snug">
-                          4. Lecture de la correspondance et des affaires diverses.
-                        </p>
-                      </div>
-
-                      {/* Lignes 5 à 10 - Saisie Libre */}
-                      <div className="space-y-2 pt-2 border-t border-amber-500/5">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-[10px] text-teal-400 font-mono font-bold uppercase tracking-wider">LIGNES 5 À 10 — SAISIE MANUELLE (4-5 lignes demandées)</span>
-                          <span className="text-[9px] bg-teal-400/10 text-teal-300 px-1.5 py-0.5 rounded font-mono">Saisie libre</span>
-                        </div>
-                        
-                        {customLines.map((line, idx) => (
-                          <div key={idx} className="flex items-center gap-2">
-                            <span className="text-xs font-bold text-teal-400/80 font-mono w-5 shrink-0 text-right">{idx + 5}.</span>
-                            <input
-                              type="text"
-                              placeholder={`Ordre du jour optionnel (ex: Morceau d'architecture...)`}
-                              value={line}
-                              onChange={(e) => {
-                                const newLines = [...customLines];
-                                newLines[idx] = e.target.value;
-                                setCustomLines(newLines);
-                              }}
-                              className="flex-grow bg-[#081619] border border-[#87A0A0]/20 rounded-lg px-3 py-2 text-xs text-white focus:border-[#C5A059] focus:outline-none transition"
-                            />
-                          </div>
-                        ))}
-                      </div>
-
-                      {/* Ligne de clôture */}
-                      <div className="bg-[#081619] border border-amber-500/5 rounded-lg p-2.5 space-y-1">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[10px] text-amber-500/80 font-mono font-bold">LIGNE FINALE — AUTOMATIQUE</span>
-                          <span className="text-[9px] bg-amber-500/10 text-amber-400 px-1.5 py-0.5 rounded font-mono">Lecture seule</span>
-                        </div>
-                        <p className="text-xs text-gray-400 font-serif leading-snug">
-                          {5 + customLines.filter(line => line.trim() !== '').length}. Clôture des Travaux au {selectedSession.degree === 'Apprenti' ? "1er Degré" : selectedSession.degree === 'Compagnon' ? "2ème Degré" : "3ème Degré"} symbolique par le V∴M∴ <span className="text-amber-300 font-semibold">{vmName}</span>
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="border-b border-amber-500/10 pb-2 pt-2">
-                      <span className="text-xs font-mono text-amber-500 uppercase tracking-widest font-bold">4. Agapes & Renseignements</span>
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <div className="space-y-0.5">
-                        <label className="text-[10px] text-[#87A0A0] uppercase tracking-wider block">Texte des Agapes</label>
-                        <textarea
-                          value={agapeText}
-                          onChange={(e) => setAgapeText(e.target.value)}
-                          rows={2}
-                          className="w-full bg-[#081619] border border-[#87A0A0]/20 rounded-lg px-3 py-1.5 text-xs text-white focus:border-[#C5A059] focus:outline-none resize-none"
-                        />
-                      </div>
-                      <div className="space-y-0.5">
-                        <label className="text-[10px] text-[#87A0A0] uppercase tracking-wider block">Texte de contact</label>
-                        <textarea
-                          value={contactText}
-                          onChange={(e) => setContactText(e.target.value)}
-                          rows={2}
-                          className="w-full bg-[#081619] border border-[#87A0A0]/20 rounded-lg px-3 py-1.5 text-xs text-white focus:border-[#C5A059] focus:outline-none resize-none"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="border-b border-amber-500/10 pb-2 pt-2">
-                      <span className="text-xs font-mono text-amber-500 uppercase tracking-widest font-bold">5. Logos de l'En-tête</span>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1">
-                        <label className="text-[10px] text-[#87A0A0] uppercase tracking-wider block font-bold">Logo Gauche</label>
-                        <div className="flex flex-col gap-1.5">
-                          <input
-                            type="file"
-                            accept="image/*"
-                            onChange={(e) => {
-                              const file = e.target.files?.[0];
-                              if (file) {
-                                const reader = new FileReader();
-                                reader.onload = (ev) => {
-                                  const base64 = ev.target?.result as string;
-                                  setCustomLeftLogo(base64);
-                                  localStorage.setItem('logo_left', base64);
-                                  setLeftLogoError(false);
-                                };
-                                reader.readAsDataURL(file);
-                              }
-                            }}
-                            className="w-full bg-[#081619] border border-[#87A0A0]/20 rounded-lg p-1 text-[10px] text-gray-400 focus:outline-none cursor-pointer"
-                          />
-                          {customLeftLogo && (
-                            <button
-                              onClick={() => {
-                                setCustomLeftLogo('');
-                                localStorage.removeItem('logo_left');
-                              }}
-                              className="text-[9px] text-red-400 hover:underline block text-left"
-                            >
-                              Supprimer
-                            </button>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className="text-[10px] text-[#87A0A0] uppercase tracking-wider block font-bold">Logo Droit</label>
-                        <div className="flex flex-col gap-1.5">
-                          <input
-                            type="file"
-                            accept="image/*"
-                            onChange={(e) => {
-                              const file = e.target.files?.[0];
-                              if (file) {
-                                const reader = new FileReader();
-                                reader.onload = (ev) => {
-                                  const base64 = ev.target?.result as string;
-                                  setCustomRightLogo(base64);
-                                  localStorage.setItem('logo_right', base64);
-                                  setRightLogoError(false);
-                                };
-                                reader.readAsDataURL(file);
-                              }
-                            }}
-                            className="w-full bg-[#081619] border border-[#87A0A0]/20 rounded-lg p-1 text-[10px] text-gray-400 focus:outline-none cursor-pointer"
-                          />
-                          {customRightLogo && (
-                            <button
-                              onClick={() => {
-                                setCustomRightLogo('');
-                                localStorage.removeItem('logo_right');
-                              }}
-                              className="text-[9px] text-red-400 hover:underline block text-left"
-                            >
-                              Supprimer
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="pt-2">
+                {/* LEFT PANEL: CONFIGURATION CONTROLS OR EMAIL SENDING */}
+                <div className="lg:col-span-5 border-r border-[#1e2e38] p-5 overflow-y-auto bg-[#122428]/40 print:hidden flex flex-col justify-between">
+                  <div>
+                    {/* TABS BAR */}
+                    <div className="flex border-b border-amber-500/20 mb-4 pb-2 gap-2">
                       <button
-                        onClick={handleSavePdfConfig}
-                        className={`w-full py-2 px-4 rounded-lg shadow-lg text-xs font-bold tracking-wider uppercase transition flex items-center justify-center gap-1.5 ${
-                          saveSuccess 
-                            ? 'bg-emerald-600 hover:bg-emerald-500 text-white animate-pulse' 
-                            : 'bg-[#C5A059] hover:bg-[#D9B56D] text-[#0A1214]'
+                        onClick={() => setEditorTab('config')}
+                        className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold uppercase tracking-wider transition ${
+                          editorTab === 'config'
+                            ? 'bg-[#0c1a1d] border border-amber-500/30 text-amber-500'
+                            : 'text-[#87A0A0] hover:text-white bg-transparent border border-transparent'
                         }`}
                       >
-                        <CheckCircle className="w-4 h-4" /> 
-                        {saveSuccess ? '✓ Modifications Enregistrées !' : 'Sauvegarder l\'Ordre du Jour'}
+                        Configuration Lettre
+                      </button>
+                      <button
+                        onClick={() => {
+                          setEditorTab('email');
+                          // Dynamic email template initialization
+                          const dateStr = new Date(selectedSession.date).toLocaleDateString('fr-FR', {
+                            day: 'numeric',
+                            month: 'long',
+                            year: 'numeric'
+                          });
+                          setEmailSubject(`[Bénou Ré N°5] Invitation : Tenue du ${dateStr}`);
+                          
+                          const degreeFr = selectedSession.degree === 'Apprenti' ? '1er DEGRE' : selectedSession.degree === 'Compagnon' ? '2e DEGRE' : '3e DEGRE';
+                          const linesStr = customLines
+                            .filter(line => line.trim() !== '')
+                            .map((line, idx) => `  ${idx + 5}. ${line}`)
+                            .join('\n');
+                          
+                          setEmailBody(
+                            `Très Chère Sœur, Très Cher Frère,\n\n` +
+                            `Vous êtes invité(e) à participer aux travaux de notre Respectable Loge :\n\n` +
+                            `- Tenue : ${sessionNumber} TENUE REGULIERE au ${degreeFr}\n` +
+                            `- Date : ${dateStr} à ${openingTime}\n` +
+                            `- Lieu : ${selectedSession.location || 'Temple de Saint-Pierre'}\n\n` +
+                            `Ordre du Jour :\n` +
+                            `  1. Ouverture des Travaux.\n` +
+                            `  2. Appel des FF et SS.\n` +
+                            `  3. Lecture de la planche tracée.\n` +
+                            `  4. Lecture de la correspondance.\n` +
+                            `${linesStr}\n` +
+                            `  ${5 + customLines.filter(line => line.trim() !== '').length}. Clôture des Travaux.\n\n` +
+                            `Agapes :\n${agapeText}\n\n` +
+                            `Contact : ${contactText}\n\n` +
+                            `Fraternellement,\n` +
+                            `Le Secrétariat de la R∴ L∴ Bénou Ré N°5`
+                          );
+                        }}
+                        className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold uppercase tracking-wider transition ${
+                          editorTab === 'email'
+                            ? 'bg-[#0c1a1d] border border-amber-500/30 text-amber-500'
+                            : 'text-[#87A0A0] hover:text-white bg-transparent border border-transparent'
+                        }`}
+                      >
+                        Envoi par E-mail
                       </button>
                     </div>
 
+                    {editorTab === 'config' ? (
+                      /* CONFIGURATION PANEL */
+                      <div className="space-y-4">
+                        <div className="border-b border-amber-500/10 pb-2">
+                          <span className="text-xs font-mono text-amber-500 uppercase tracking-widest font-bold">1. En-tête & Lieu</span>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1">
+                            <label className="text-[11px] text-[#87A0A0] uppercase tracking-wider block">N° de Tenue</label>
+                            <input
+                              type="text"
+                              value={sessionNumber}
+                              onChange={(e) => setSessionNumber(e.target.value)}
+                              className="w-full bg-[#081619] border border-[#87A0A0]/20 rounded-lg px-3 py-2 text-xs text-white focus:border-[#C5A059] focus:outline-none"
+                            />
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="text-[11px] text-[#87A0A0] uppercase tracking-wider block">Heure d'ouverture</label>
+                            <input
+                              type="text"
+                              value={openingTime}
+                              onChange={(e) => setOpeningTime(e.target.value)}
+                              className="w-full bg-[#081619] border border-[#87A0A0]/20 rounded-lg px-3 py-2 text-xs text-white focus:border-[#C5A059] focus:outline-none"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-[11px] text-[#87A0A0] uppercase tracking-wider block">Date de Tenue (Texte de l'En-tête)</label>
+                          <input
+                            type="text"
+                            value={formattedHeaderDate}
+                            onChange={(e) => setFormattedHeaderDate(e.target.value)}
+                            className="w-full bg-[#081619] border border-[#87A0A0]/20 rounded-lg px-3 py-2 text-xs text-white focus:border-[#C5A059] focus:outline-none"
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-[11px] text-[#87A0A0] uppercase tracking-wider block">Formule principale d'invitation</label>
+                          <textarea
+                            value={invitationMainLine}
+                            onChange={(e) => setInvitationMainLine(e.target.value)}
+                            rows={2}
+                            className="w-full bg-[#081619] border border-[#87A0A0]/20 rounded-lg px-3 py-2 text-xs text-white focus:border-[#C5A059] focus:outline-none resize-none"
+                          />
+                        </div>
+
+                        <div className="border-b border-amber-500/10 pb-2 pt-2">
+                          <span className="text-xs font-mono text-amber-500 uppercase tracking-widest font-bold">2. Calendrier Égyptien & VM</span>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1">
+                            <label className="text-[11px] text-[#87A0A0] uppercase tracking-wider block">Nom de Divinité</label>
+                            <input
+                              type="text"
+                              value={deityName}
+                              onChange={(e) => setDeityName(e.target.value)}
+                              className="w-full bg-[#081619] border border-[#87A0A0]/20 rounded-lg px-3 py-2 text-xs text-white focus:border-[#C5A059] focus:outline-none"
+                            />
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="text-[11px] text-[#87A0A0] uppercase tracking-wider block">An de la Lumière</label>
+                            <input
+                              type="text"
+                              value={egyptianYear}
+                              onChange={(e) => setEgyptianYear(e.target.value)}
+                              className="w-full bg-[#081619] border border-[#87A0A0]/20 rounded-lg px-3 py-2 text-xs text-white focus:border-[#C5A059] focus:outline-none"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-[11px] text-[#87A0A0] uppercase tracking-wider block">Vénérable Maître (Signature/Fermeture)</label>
+                          <input
+                            type="text"
+                            value={vmName}
+                            onChange={(e) => setVmName(e.target.value)}
+                            className="w-full bg-[#081619] border border-[#87A0A0]/20 rounded-lg px-3 py-2 text-xs text-white focus:border-[#C5A059] focus:outline-none"
+                          />
+                        </div>
+
+                        <div className="border-b border-amber-500/10 pb-2 pt-2">
+                          <span className="text-xs font-mono text-amber-500 uppercase tracking-widest font-bold">3. Ordre du Jour (Feuille de Saisie)</span>
+                        </div>
+
+                        <div className="space-y-3">
+                          {/* Ligne 1 - Fixe/Auto */}
+                          <div className="bg-[#081619] border border-amber-500/5 rounded-lg p-2.5 space-y-1">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] text-amber-500/80 font-mono font-bold">LIGNE 1 — AUTOMATIQUE</span>
+                              <span className="text-[9px] bg-amber-500/10 text-amber-400 px-1.5 py-0.5 rounded font-mono">Lecture seule</span>
+                            </div>
+                            <p className="text-xs text-gray-400 font-serif leading-snug">
+                              1. <span className="text-amber-300 font-semibold">{openingTime}</span> Ouverture des Travaux au {selectedSession.degree === 'Apprenti' ? "1er Degré" : selectedSession.degree === 'Compagnon' ? "2ème Degré" : "3ème Degré"} symbolique par le V∴M∴ <span className="text-amber-300 font-semibold">{vmName}</span>
+                            </p>
+                          </div>
+
+                          {/* Ligne 2 - Fixe */}
+                          <div className="bg-[#081619] border border-amber-500/5 rounded-lg p-2.5 space-y-1 opacity-75">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] text-gray-500 font-mono font-bold">LIGNE 2 — TEMPLATE FIXE</span>
+                              <span className="text-[9px] bg-gray-500/10 text-gray-400 px-1.5 py-0.5 rounded font-mono">Lecture seule</span>
+                            </div>
+                            <p className="text-xs text-gray-400 font-serif leading-snug">
+                              2. Appel des FF et SS ∴ de la loge.
+                            </p>
+                          </div>
+
+                          {/* Ligne 3 - Fixe */}
+                          <div className="bg-[#081619] border border-amber-500/5 rounded-lg p-2.5 space-y-1 opacity-75">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] text-gray-500 font-mono font-bold">LIGNE 3 — TEMPLATE FIXE</span>
+                              <span className="text-[9px] bg-gray-500/10 text-gray-400 px-1.5 py-0.5 rounded font-mono">Lecture seule</span>
+                            </div>
+                            <p className="text-xs text-gray-400 font-serif leading-snug">
+                              3. Lecture de la planche tracée de nos derniers travaux au {selectedSession.degree === 'Apprenti' ? "1er Degré" : selectedSession.degree === 'Compagnon' ? "2ème Degré" : "3ème Degré"} symbolique.
+                            </p>
+                          </div>
+
+                          {/* Ligne 4 - Fixe */}
+                          <div className="bg-[#081619] border border-amber-500/5 rounded-lg p-2.5 space-y-1 opacity-75">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] text-gray-500 font-mono font-bold">LIGNE 4 — TEMPLATE FIXE</span>
+                              <span className="text-[9px] bg-gray-500/10 text-gray-400 px-1.5 py-0.5 rounded font-mono">Lecture seule</span>
+                            </div>
+                            <p className="text-xs text-gray-400 font-serif leading-snug">
+                              4. Lecture de la correspondance et des affaires diverses.
+                            </p>
+                          </div>
+
+                          {/* Lignes 5 à 10 - Saisie Libre */}
+                          <div className="space-y-2 pt-2 border-t border-amber-500/5">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-[10px] text-teal-400 font-mono font-bold uppercase tracking-wider">LIGNES 5 À 10 — SAISIE MANUELLE (4-5 lignes demandées)</span>
+                              <span className="text-[9px] bg-teal-400/10 text-teal-300 px-1.5 py-0.5 rounded font-mono">Saisie libre</span>
+                            </div>
+                            
+                            {customLines.map((line, idx) => (
+                              <div key={idx} className="flex items-center gap-2">
+                                <span className="text-xs font-bold text-teal-400/80 font-mono w-5 shrink-0 text-right">{idx + 5}.</span>
+                                <input
+                                  type="text"
+                                  placeholder={`Ordre du jour optionnel (ex: Morceau d'architecture...)`}
+                                  value={line}
+                                  onChange={(e) => {
+                                    const newLines = [...customLines];
+                                    newLines[idx] = e.target.value;
+                                    setCustomLines(newLines);
+                                  }}
+                                  className="flex-grow bg-[#081619] border border-[#87A0A0]/20 rounded-lg px-3 py-2 text-xs text-white focus:border-[#C5A059] focus:outline-none transition"
+                                />
+                              </div>
+                            ))}
+                          </div>
+
+                          {/* Ligne de clôture */}
+                          <div className="bg-[#081619] border border-amber-500/5 rounded-lg p-2.5 space-y-1">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] text-amber-500/80 font-mono font-bold">LIGNE FINALE — AUTOMATIQUE</span>
+                              <span className="text-[9px] bg-amber-500/10 text-amber-400 px-1.5 py-0.5 rounded font-mono">Lecture seule</span>
+                            </div>
+                            <p className="text-xs text-gray-400 font-serif leading-snug">
+                              {5 + customLines.filter(line => line.trim() !== '').length}. Clôture des Travaux au {selectedSession.degree === 'Apprenti' ? "1er Degré" : selectedSession.degree === 'Compagnon' ? "2ème Degré" : "3ème Degré"} symbolique par le V∴M∴ <span className="text-amber-300 font-semibold">{vmName}</span>
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="border-b border-amber-500/10 pb-2 pt-2">
+                          <span className="text-xs font-mono text-amber-500 uppercase tracking-widest font-bold">4. Agapes & Renseignements</span>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <div className="space-y-0.5">
+                            <label className="text-[10px] text-[#87A0A0] uppercase tracking-wider block">Texte des Agapes</label>
+                            <textarea
+                              value={agapeText}
+                              onChange={(e) => setAgapeText(e.target.value)}
+                              rows={2}
+                              className="w-full bg-[#081619] border border-[#87A0A0]/20 rounded-lg px-3 py-1.5 text-xs text-white focus:border-[#C5A059] focus:outline-none resize-none"
+                            />
+                          </div>
+                          <div className="space-y-0.5">
+                            <label className="text-[10px] text-[#87A0A0] uppercase tracking-wider block">Texte de contact</label>
+                            <textarea
+                              value={contactText}
+                              onChange={(e) => setContactText(e.target.value)}
+                              rows={2}
+                              className="w-full bg-[#081619] border border-[#87A0A0]/20 rounded-lg px-3 py-1.5 text-xs text-white focus:border-[#C5A059] focus:outline-none resize-none"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="border-b border-amber-500/10 pb-2 pt-2">
+                          <span className="text-xs font-mono text-amber-500 uppercase tracking-widest font-bold">5. Logos de l'En-tête</span>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1">
+                            <label className="text-[10px] text-[#87A0A0] uppercase tracking-wider block font-bold">Logo Gauche</label>
+                            <div className="flex flex-col gap-1.5">
+                              <input
+                                type="file"
+                                accept="image/*"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) {
+                                    const reader = new FileReader();
+                                    reader.onload = (ev) => {
+                                      const base64 = ev.target?.result as string;
+                                      setCustomLeftLogo(base64);
+                                      localStorage.setItem('logo_left', base64);
+                                      setLeftLogoError(false);
+                                    };
+                                    reader.readAsDataURL(file);
+                                  }
+                                }}
+                                className="w-full bg-[#081619] border border-[#87A0A0]/20 rounded-lg p-1 text-[10px] text-gray-400 focus:outline-none cursor-pointer"
+                              />
+                              {customLeftLogo && (
+                                <button
+                                  onClick={() => {
+                                    setCustomLeftLogo('');
+                                    localStorage.removeItem('logo_left');
+                                  }}
+                                  className="text-[9px] text-red-400 hover:underline block text-left"
+                                >
+                                  Supprimer
+                                </button>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="text-[10px] text-[#87A0A0] uppercase tracking-wider block font-bold">Logo Droit</label>
+                            <div className="flex flex-col gap-1.5">
+                              <input
+                                type="file"
+                                accept="image/*"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) {
+                                    const reader = new FileReader();
+                                    reader.onload = (ev) => {
+                                      const base64 = ev.target?.result as string;
+                                      setCustomRightLogo(base64);
+                                      localStorage.setItem('logo_right', base64);
+                                      setRightLogoError(false);
+                                    };
+                                    reader.readAsDataURL(file);
+                                  }
+                                }}
+                                className="w-full bg-[#081619] border border-[#87A0A0]/20 rounded-lg p-1 text-[10px] text-gray-400 focus:outline-none cursor-pointer"
+                              />
+                              {customRightLogo && (
+                                <button
+                                  onClick={() => {
+                                    setCustomRightLogo('');
+                                    localStorage.removeItem('logo_right');
+                                  }}
+                                  className="text-[9px] text-red-400 hover:underline block text-left"
+                                >
+                                  Supprimer
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="pt-2">
+                          <button
+                            onClick={handleSavePdfConfig}
+                            className={`w-full py-2 px-4 rounded-lg shadow-lg text-xs font-bold tracking-wider uppercase transition flex items-center justify-center gap-1.5 ${
+                              saveSuccess 
+                                ? 'bg-emerald-600 hover:bg-emerald-500 text-white animate-pulse' 
+                                : 'bg-[#C5A059] hover:bg-[#D9B56D] text-[#0A1214]'
+                            }`}
+                          >
+                            <CheckCircle className="w-4 h-4" /> 
+                            {saveSuccess ? '✓ Modifications Enregistrées !' : 'Sauvegarder l\'Ordre du Jour'}
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      /* EMAIL PANEL */
+                      <div className="space-y-4">
+                        <div className="bg-[#081619]/60 p-3 rounded-xl border border-amber-500/10 text-[11px] text-[#87A0A0] leading-relaxed">
+                          Sélectionnez les destinataires de la loge (membres actifs) et les invités, prévisualisez ou modifiez le message ci-dessous, puis cliquez sur <strong>Envoyer</strong> pour diffuser l'invitation.
+                        </div>
+
+                        {/* Subject */}
+                        <div className="space-y-1">
+                          <label className="text-[11px] text-[#87A0A0] uppercase tracking-wider block font-bold">Sujet du Mail</label>
+                          <input
+                            type="text"
+                            value={emailSubject}
+                            onChange={(e) => setEmailSubject(e.target.value)}
+                            className="w-full bg-[#081619] border border-[#87A0A0]/20 rounded-lg px-3 py-2 text-xs text-white focus:border-[#C5A059] focus:outline-none"
+                            placeholder="Sujet de l'invitation..."
+                          />
+                        </div>
+
+                        {/* Message / Body */}
+                        <div className="space-y-1">
+                          <label className="text-[11px] text-[#87A0A0] uppercase tracking-wider block font-bold">Corps du Message</label>
+                          <textarea
+                            value={emailBody}
+                            onChange={(e) => setEmailBody(e.target.value)}
+                            rows={8}
+                            className="w-full bg-[#081619] border border-[#87A0A0]/20 rounded-lg px-3 py-2 text-xs text-white focus:border-[#C5A059] focus:outline-none font-mono"
+                            placeholder="Écrivez le message de l'invitation..."
+                          />
+                        </div>
+
+                        {/* Quick Selection Buttons */}
+                        <div className="space-y-2">
+                          <label className="text-[11px] text-[#87A0A0] uppercase tracking-wider block font-bold">Sélections rapides</label>
+                          <div className="flex flex-wrap gap-1.5">
+                            <button
+                              type="button"
+                              onClick={handleSelectAllByDegree}
+                              className="px-2.5 py-1 rounded bg-[#0C7A7A]/20 border border-[#0C7A7A]/40 text-[#0C7A7A] hover:bg-[#0C7A7A]/30 text-[10px] font-bold transition uppercase tracking-wider"
+                            >
+                              Membres de la Loge (Selon Degré : {selectedSession.degree})
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedEmailVisitors(visitors.map(v => v.id))}
+                              className="px-2.5 py-1 rounded bg-[#0C7A7A]/20 border border-[#0C7A7A]/40 text-[#0C7A7A] hover:bg-[#0C7A7A]/30 text-[10px] font-bold transition uppercase tracking-wider"
+                            >
+                              Tous les Invités
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedEmailMembers([]);
+                                setSelectedEmailVisitors([]);
+                              }}
+                              className="px-2.5 py-1 rounded bg-red-950/20 border border-red-900/30 text-red-400 hover:bg-red-900/10 text-[10px] font-bold transition uppercase tracking-wider"
+                            >
+                              Tout Décocher
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Lodge Members list */}
+                        <div className="space-y-1">
+                          <div className="flex justify-between items-center text-[10px] text-[#87A0A0] uppercase font-bold tracking-wider">
+                            <span>Membres de la Loge ({selectedEmailMembers.length} sélectionnés)</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const allActiveMemberIds = members.filter(m => m.status === 'Actif').map(m => m.id);
+                                setSelectedEmailMembers(
+                                  selectedEmailMembers.length === allActiveMemberIds.length ? [] : allActiveMemberIds
+                                );
+                              }}
+                              className="text-amber-500 hover:underline"
+                            >
+                              {selectedEmailMembers.length === members.filter(m => m.status === 'Actif').length ? "Aucun" : "Tous"}
+                            </button>
+                          </div>
+                          <div className="max-h-40 border border-[#87A0A0]/10 rounded-xl bg-[#081619] overflow-y-auto p-2 space-y-1">
+                            {members.filter(m => m.status === 'Actif').map(member => {
+                              const isChecked = selectedEmailMembers.includes(member.id);
+                              return (
+                                <label
+                                  key={member.id}
+                                  className="flex items-start gap-2.5 p-1.5 rounded hover:bg-teal-950/30 cursor-pointer text-xs transition"
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={isChecked}
+                                    onChange={(e) => {
+                                      if (e.target.checked) {
+                                        setSelectedEmailMembers([...selectedEmailMembers, member.id]);
+                                      } else {
+                                        setSelectedEmailMembers(selectedEmailMembers.filter(id => id !== member.id));
+                                      }
+                                    }}
+                                    className="mt-0.5 rounded border-[#87A0A0]/30 text-[#0C7A7A] focus:ring-[#0C7A7A] bg-[#081619]"
+                                  />
+                                  <div className="flex-1">
+                                    <div className="flex items-center justify-between font-semibold text-white">
+                                      <span>{member.firstName} {member.lastName}</span>
+                                      <span className={`text-[9px] font-mono font-bold px-1.5 py-0.2 rounded ${
+                                        member.grade === 'Maitre' 
+                                          ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20' 
+                                          : member.grade === 'Compagnon'
+                                            ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                                            : 'bg-green-500/10 text-green-400 border border-green-500/20'
+                                      }`}>
+                                        {member.grade}
+                                      </span>
+                                    </div>
+                                    <div className="text-[10px] text-[#87A0A0] truncate">{member.email}</div>
+                                  </div>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Visitors list */}
+                        <div className="space-y-1">
+                          <div className="flex justify-between items-center text-[10px] text-[#87A0A0] uppercase font-bold tracking-wider">
+                            <span>Invités & Visiteurs ({selectedEmailVisitors.length} sélectionnés)</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const allVisitorIds = visitors.map(v => v.id);
+                                setSelectedEmailVisitors(
+                                  selectedEmailVisitors.length === allVisitorIds.length ? [] : allVisitorIds
+                                );
+                              }}
+                              className="text-amber-500 hover:underline"
+                            >
+                              {selectedEmailVisitors.length === visitors.length ? "Aucun" : "Tous"}
+                            </button>
+                          </div>
+                          <div className="max-h-40 border border-[#87A0A0]/10 rounded-xl bg-[#081619] overflow-y-auto p-2 space-y-1">
+                            {visitors.length === 0 ? (
+                              <div className="text-center py-4 text-xs text-[#87A0A0] italic">Aucun visiteur enregistré</div>
+                            ) : (
+                              visitors.map(visitor => {
+                                const isChecked = selectedEmailVisitors.includes(visitor.id);
+                                return (
+                                  <label
+                                    key={visitor.id}
+                                    className="flex items-start gap-2.5 p-1.5 rounded hover:bg-teal-950/30 cursor-pointer text-xs transition"
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={isChecked}
+                                      onChange={(e) => {
+                                        if (e.target.checked) {
+                                          setSelectedEmailVisitors([...selectedEmailVisitors, visitor.id]);
+                                        } else {
+                                          setSelectedEmailVisitors(selectedEmailVisitors.filter(id => id !== visitor.id));
+                                        }
+                                      }}
+                                      className="mt-0.5 rounded border-[#87A0A0]/30 text-[#0C7A7A] focus:ring-[#0C7A7A] bg-[#081619]"
+                                    />
+                                    <div className="flex-1">
+                                      <div className="flex items-center justify-between font-semibold text-white">
+                                        <span>{visitor.firstName} {visitor.lastName}</span>
+                                        <span className="text-[9px] font-mono text-amber-500 truncate max-w-[120px] text-right" title={visitor.lodge}>
+                                          {visitor.lodge}
+                                        </span>
+                                      </div>
+                                      <div className="text-[10px] text-[#87A0A0] truncate">{visitor.email}</div>
+                                    </div>
+                                  </label>
+                                );
+                              })
+                            )}
+                          </div>
+                        </div>
+
+                        {/* SEND MAIL BUTTON */}
+                        <div className="pt-2">
+                          {emailSentSuccess ? (
+                            <div className="bg-emerald-950/30 border border-emerald-500/20 text-emerald-400 p-3 rounded-xl text-center space-y-1 animate-fade-in">
+                              <p className="text-xs font-bold uppercase tracking-wider">✓ Envoi réussi !</p>
+                              <p className="text-[10px] text-gray-400">
+                                L'invitation a été envoyée avec succès à {selectedEmailMembers.length + selectedEmailVisitors.length} destinataire(s).
+                              </p>
+                              <button
+                                type="button"
+                                onClick={() => setEmailSentSuccess(false)}
+                                className="text-[10px] text-amber-500 hover:underline pt-1 block mx-auto font-bold uppercase tracking-wide"
+                              >
+                                Réinitialiser l'envoi
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={handleSendInvitationByEmail}
+                              disabled={isSendingEmail || (selectedEmailMembers.length === 0 && selectedEmailVisitors.length === 0)}
+                              className={`w-full py-2.5 px-4 rounded-xl shadow-lg text-xs font-bold tracking-wider uppercase transition flex items-center justify-center gap-1.5 ${
+                                isSendingEmail
+                                  ? 'bg-amber-500/50 text-black cursor-not-allowed'
+                                  : selectedEmailMembers.length === 0 && selectedEmailVisitors.length === 0
+                                    ? 'bg-gray-800 text-gray-500 cursor-not-allowed border border-gray-700/50'
+                                    : 'bg-amber-500 hover:bg-amber-600 text-black'
+                              }`}
+                            >
+                              {isSendingEmail ? (
+                                <>
+                                  <span className="animate-spin mr-1 h-3.5 w-3.5 border-2 border-black border-t-transparent rounded-full" />
+                                  ENVOI EN COURS...
+                                </>
+                              ) : (
+                                <>
+                                  <Mail className="w-4 h-4" />
+                                  Envoyer l'invitation par mail ({selectedEmailMembers.length + selectedEmailVisitors.length})
+                                </>
+                              )}
+                            </button>
+                          )}
+                          {selectedEmailMembers.length === 0 && selectedEmailVisitors.length === 0 && !emailSentSuccess && (
+                            <p className="text-center text-[10px] text-[#87A0A0]/60 mt-1">
+                              Veuillez sélectionner au moins un membre ou un invité pour activer l'envoi.
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <div className="pt-4 border-t border-amber-500/10 text-center text-[10px] text-[#87A0A0]">
@@ -1459,18 +1856,7 @@ export default function SessionsList({
                 <div>
                   {!selectedSession.isValidated ? (
                     <button
-                      onClick={async () => {
-                        if (window.confirm('Voulez-vous valider cette tenue ? Le numéro de la prochaine tenue sera incrémenté.')) {
-                          const updated: Session = {
-                            ...selectedSession,
-                            isValidated: true,
-                            plancheValidated: true
-                          };
-                          await incrementSessionChronoInFirestore();
-                          onUpdateSession(updated);
-                          setSelectedSession(updated);
-                        }
-                      }}
+                      onClick={() => setValidateConfirmationSession(selectedSession)}
                       className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-black text-xs font-black tracking-wider transition uppercase hover:shadow-lg hover:scale-[1.02] active:scale-[0.98]"
                     >
                       <Check className="h-4 w-4 stroke-[3px]" />
@@ -1490,29 +1876,22 @@ export default function SessionsList({
               <div className="bg-[#122428]/40 border border-amber-500/10 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
                 <div className="space-y-0.5 text-center sm:text-left">
                   <h4 className="text-sm font-bold text-white">Chambre du Secrétariat (Documents Officiels)</h4>
-                  <p className="text-xs text-[#87A0A0]">Générez et imprimez les convocations, invitations et listes rituelles en un clic.</p>
+                  <p className="text-xs text-[#87A0A0]">Préparez l'invitation, envoyez-la par e-mail ou imprimez la liste d'émargement.</p>
                 </div>
 
                 <div className="flex flex-wrap gap-2 justify-center">
                   <button
-                    onClick={() => setPdfTypeToShow('convocation')}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-teal-950/40 border border-teal-900/30 text-teal-400 hover:bg-teal-900/20 text-xs font-bold transition"
+                    onClick={() => setPdfTypeToShow('invitation')}
+                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-[#0C7A7A] hover:bg-[#0A6868] text-white text-xs font-bold transition border border-amber-500/10 shadow"
                   >
                     <Mail className="h-3.5 w-3.5" />
-                    CONVOCATION
-                  </button>
-                  <button
-                    onClick={() => setPdfTypeToShow('invitation')}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-teal-950/40 border border-teal-900/30 text-teal-400 hover:bg-teal-900/20 text-xs font-bold transition"
-                  >
-                    <Users className="h-3.5 w-3.5" />
-                    INVITATION
+                    INVITATION / ENVOI DE MAIL
                   </button>
                   <button
                     onClick={() => setPdfTypeToShow('presence')}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#0C7A7A] hover:bg-[#0A6868] text-white text-xs font-bold transition border border-amber-500/10 shadow"
+                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-teal-950/40 border border-teal-900/30 text-teal-400 hover:bg-teal-900/20 text-xs font-bold transition"
                   >
-                    <FileText className="h-3.5 w-3.5 text-[#C5A059]" />
+                    <FileText className="h-3.5 w-3.5" />
                     FEUILLE D'ÉMARGEMENT
                   </button>
                 </div>
@@ -1771,19 +2150,31 @@ export default function SessionsList({
                     visitors.map(visitor => {
                       const isAdded = selectedSession.visitorIds.includes(visitor.id);
                       return (
-                        <div key={visitor.id} className="flex items-center justify-between py-2 px-2 rounded hover:bg-black/10 transition">
+                        <div key={visitor.id} className="flex flex-col sm:flex-row sm:items-center justify-between py-3 px-2 gap-2 rounded hover:bg-black/10 transition">
                           <div>
                             <p className="text-sm font-bold text-white">{visitor.firstName} {visitor.lastName}</p>
-                            <p className="text-[10px] text-[#87A0A0]">{visitor.lodge} ({visitor.orient})</p>
+                            <p className="text-[10px] text-[#87A0A0]">{visitor.lodge} ({visitor.orient}){visitor.function && ` • ${visitor.function}`}</p>
                           </div>
-                          <button
-                            type="button"
-                            disabled={isAdded}
-                            onClick={() => handleAddVisitorToSession(visitor.id)}
-                            className={`px-3 py-1 rounded text-xs font-bold transition ${isAdded ? 'bg-gray-800 text-gray-500 cursor-not-allowed' : 'bg-teal-950 text-teal-400 border border-teal-800 hover:bg-teal-900'}`}
-                          >
-                            {isAdded ? 'DÉJÀ AJOUTÉ' : 'AJOUTER'}
-                          </button>
+                          <div className="flex items-center gap-2">
+                            <select
+                              value={tempRoles[visitor.id] || 'Simple Visiteur'}
+                              onChange={(e) => setTempRoles(prev => ({ ...prev, [visitor.id]: e.target.value }))}
+                              disabled={isAdded}
+                              className="bg-[#081619] border border-[#87A0A0]/20 rounded px-2.5 py-1.5 text-[11px] text-white focus:border-[#C5A059] focus:outline-none"
+                            >
+                              {visitorPositions.map(pos => (
+                                <option key={pos} value={pos}>{pos}</option>
+                              ))}
+                            </select>
+                            <button
+                              type="button"
+                              disabled={isAdded}
+                              onClick={() => handleAddVisitorToSession(visitor.id, tempRoles[visitor.id] || 'Simple Visiteur')}
+                              className={`px-3 py-1.5 rounded text-xs font-bold transition ${isAdded ? 'bg-gray-800 text-gray-500 cursor-not-allowed' : 'bg-teal-950 text-teal-400 border border-teal-800 hover:bg-teal-900 shrink-0'}`}
+                            >
+                              {isAdded ? 'DÉJÀ AJOUTÉ' : 'AJOUTER'}
+                            </button>
+                          </div>
                         </div>
                       );
                     })
@@ -1876,10 +2267,33 @@ export default function SessionsList({
                     .map(visitor => {
                       const hasSigned = !!selectedSession.signatures[visitor.id];
                       return (
-                        <div key={visitor.id} className="flex items-center justify-between py-3">
+                        <div key={visitor.id} className="flex flex-col sm:flex-row sm:items-center justify-between py-3 gap-3">
                           <div>
                             <p className="text-sm font-bold text-white">{visitor.firstName} {visitor.lastName}</p>
-                            <p className="text-xs text-gray-400">{visitor.lodge} ({visitor.orient})</p>
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-0.5 text-xs text-gray-400">
+                              <span>{visitor.lodge} ({visitor.orient})</span>
+                              {visitor.function && <span>• {visitor.function}</span>}
+                              {isSecOrVM ? (
+                                <div className="flex items-center gap-1">
+                                  <span className="text-amber-500 font-bold font-mono">• Poste :</span>
+                                  <select
+                                    value={selectedSession.visitorRoles?.[visitor.id] || 'Simple Visiteur'}
+                                    onChange={(e) => handleUpdateVisitorRole(visitor.id, e.target.value)}
+                                    className="bg-[#081619] border border-amber-500/20 hover:border-amber-500/40 rounded px-1.5 py-0.5 text-[11px] text-amber-400 focus:outline-none"
+                                  >
+                                    {visitorPositions.map(pos => (
+                                      <option key={pos} value={pos}>{pos}</option>
+                                    ))}
+                                  </select>
+                                </div>
+                              ) : (
+                                selectedSession.visitorRoles?.[visitor.id] && (
+                                  <span className="text-amber-500 font-bold font-mono">
+                                    • Poste tenu : {selectedSession.visitorRoles[visitor.id]}
+                                  </span>
+                                )
+                              )}
+                            </div>
                           </div>
 
                           <div className="flex items-center gap-3">
@@ -1996,6 +2410,62 @@ export default function SessionsList({
           </div>
         )}
       </main>
+
+      {/* CONFIRM DELETE MODAL */}
+      {deleteConfirmationId && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
+          <div className="bg-[#122428] border-2 border-red-500/30 rounded-2xl p-6 max-w-sm w-full space-y-4 shadow-2xl relative">
+            <h3 className="text-lg font-bold text-red-400 uppercase tracking-wider">
+              Supprimer la Tenue ?
+            </h3>
+            <p className="text-sm text-[#87A0A0]">
+              Voulez-vous vraiment supprimer définitivement cette tenue ? Cette action est irréversible.
+            </p>
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                onClick={() => setDeleteConfirmationId(null)}
+                className="px-4 py-2 rounded-xl bg-teal-950 border border-teal-800 text-teal-400 hover:bg-teal-900 transition text-xs font-bold uppercase tracking-wider"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={confirmDelete}
+                className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white transition text-xs font-bold uppercase tracking-wider"
+              >
+                Supprimer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CONFIRM VALIDATION MODAL */}
+      {validateConfirmationSession && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
+          <div className="bg-[#122428] border-2 border-amber-500/30 rounded-2xl p-6 max-w-sm w-full space-y-4 shadow-2xl relative">
+            <h3 className="text-lg font-bold text-amber-500 uppercase tracking-wider">
+              Valider la Tenue ?
+            </h3>
+            <p className="text-sm text-[#87A0A0]">
+              Voulez-vous valider cette tenue ? Le numéro de la prochaine tenue sera incrémenté.
+            </p>
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                onClick={() => setValidateConfirmationSession(null)}
+                className="px-4 py-2 rounded-xl bg-teal-950 border border-teal-800 text-teal-400 hover:bg-teal-900 transition text-xs font-bold uppercase tracking-wider"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={confirmValidation}
+                className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-black transition text-xs font-black uppercase tracking-wider"
+              >
+                Confirmer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

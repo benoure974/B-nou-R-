@@ -77,7 +77,14 @@ export default function PlancheTraceeScreen({
   const handleGenerateTemplate = () => {
     const presentMembers = members.filter(m => selectedSession.presentIds?.includes(m.id));
     const visitorNames = visitors.filter(v => selectedSession.visitorIds?.includes(v.id))
-      .map(v => `V∴ S∴ ${v.firstName} ${v.lastName} (${v.lodge} - Orient de ${v.orient})`);
+      .map(v => {
+        const titleAndName = `V∴ S∴ ${v.firstName} ${v.lastName}`;
+        const sessionRole = selectedSession.visitorRoles?.[v.id];
+        const funcSuffix = sessionRole && sessionRole !== 'Simple Visiteur'
+          ? `, occupant l'office de ${sessionRole}`
+          : (v.function ? `, ${v.function}` : '');
+        return `${titleAndName} (${v.lodge} - Orient de ${v.orient}${funcSuffix})`;
+      });
 
     const formattedDate = new Date(selectedSession.date).toLocaleDateString('fr-FR', {
       weekday: 'long',

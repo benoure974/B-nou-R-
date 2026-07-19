@@ -263,7 +263,8 @@ export const initialVisitors: Visitor[] = [
     orient: 'Paris',
     obedience: 'Grand Orient de France',
     email: 'alain.lefevre@gmail.com',
-    phone: '06 92 12 34 56'
+    phone: '06 92 12 34 56',
+    function: 'Vénérable Maître'
   },
   {
     id: 'v2',
@@ -273,7 +274,8 @@ export const initialVisitors: Visitor[] = [
     orient: 'Saint-Denis',
     obedience: 'Grande Loge Féminine de Memphis-Misraïm',
     email: 'catherine.giraud@gmail.com',
-    phone: '06 93 98 76 54'
+    phone: '06 93 98 76 54',
+    function: 'Secrétaire'
   },
   {
     id: 'v3',
@@ -283,7 +285,8 @@ export const initialVisitors: Visitor[] = [
     orient: 'Saint-Pierre',
     obedience: 'Grande Loge de France',
     email: 'guillaume.hoarau@orange.re',
-    phone: '06 92 45 45 45'
+    phone: '06 92 45 45 45',
+    function: 'Hospitalier'
   }
 ];
 

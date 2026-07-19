@@ -72,7 +72,8 @@ export default function VisitorsList({
       orient: '',
       obedience: '',
       email: '',
-      phone: ''
+      phone: '',
+      function: ''
     });
     setShowFormModal(true);
   };
@@ -216,6 +217,17 @@ export default function VisitorsList({
                 />
               </div>
 
+              <div className="space-y-1">
+                <label className="text-xs text-[#87A0A0]">Fonction (ou Qualité)</label>
+                <input
+                  type="text"
+                  placeholder="ex: Vénérable Maître, Hospitalier, Visiteur, Membre..."
+                  value={formData.function || ''}
+                  onChange={e => setFormData({ ...formData, function: e.target.value })}
+                  className="w-full bg-[#081619] border border-[#87A0A0]/20 rounded-xl px-3.5 py-2 text-white focus:border-[#C5A059] focus:outline-none"
+                />
+              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
                   <label className="text-xs text-[#87A0A0]">Orient (Ville) *</label>
@@ -294,12 +306,19 @@ export default function VisitorsList({
                   <div className="space-y-3">
                     {/* Visitor name */}
                     <div className="flex gap-2 items-center">
-                      <div className="h-8 w-8 rounded-full border border-teal-500/20 flex items-center justify-center bg-[#081619] text-teal-400">
+                      <div className="h-8 w-8 rounded-full border border-teal-500/20 flex items-center justify-center bg-[#081619] text-teal-400 shrink-0">
                         <User className="h-4 w-4" />
                       </div>
-                      <h4 className="font-sans text-sm font-bold text-white uppercase tracking-wider group-hover:text-amber-300 transition">
-                        {visitor.firstName} {visitor.lastName}
-                      </h4>
+                      <div>
+                        <h4 className="font-sans text-sm font-bold text-white uppercase tracking-wider group-hover:text-amber-300 transition">
+                          {visitor.firstName} {visitor.lastName}
+                        </h4>
+                        {visitor.function && (
+                          <span className="inline-block text-[9px] bg-amber-500/10 text-amber-400 border border-amber-500/20 px-1.5 py-0.5 rounded font-mono font-bold uppercase tracking-wider mt-0.5">
+                            {visitor.function}
+                          </span>
+                        )}
+                      </div>
                     </div>
 
                     {/* Lodge & Orient details */}

@@ -60,6 +60,7 @@ export interface Session {
   plancheSecretarySigned?: boolean;
   plancheVMSigned?: boolean;
   sacPropositions?: string;
+  visitorRoles?: Record<string, string>; // mapping visitorId -> position/role held during session
 }
 
 export interface Visitor {
@@ -71,6 +72,7 @@ export interface Visitor {
   obedience: string;
   email: string;
   phone: string;
+  function?: string;
 }
 
 export interface DriveFile {
