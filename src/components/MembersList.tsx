@@ -40,7 +40,17 @@ export default function MembersList({
   const [gradeFilter, setGradeFilter] = useState<'All' | 'Apprenti' | 'Compagnon' | 'Maitre'>('All');
 
   // Security Flags
-  const isVM = currentUser.email === 'vm@loge.com' || currentUser.function === 'Vénérable Maître';
+  const isVM = currentUser.email === 'vm@loge.com' || 
+               currentUser.email === 'gaudin.bruno974@gmail.com' ||
+               currentUser.email === 'benoure974@gmail.com' ||
+               currentUser.function === 'Vénérable Maître' ||
+               currentUser.function === 'Vénérable maître' ||
+               currentUser.function === 'Vénérable Maitre';
+
+  const isSecrétaire = currentUser.function === 'Secrétaire' ||
+                       currentUser.email === 'muriel.mete.mm@gmail.com';
+
+  const canViewAllDetails = isVM || isSecrétaire || (selectedMember && currentUser.id === selectedMember.id);
 
   // State for add/edit form
   const [formData, setFormData] = useState<Partial<Member>>({});
@@ -95,7 +105,7 @@ export default function MembersList({
     const isNew = !members.some(m => m.id === formData.id);
     const finalMember = {
       ...formData,
-      loginId: formData.email, // Auto set loginId as email for ease of use
+      loginId: formData.loginId || formData.email,
     } as Member;
 
     if (isNew) {
@@ -213,15 +223,41 @@ export default function MembersList({
                 />
               </div>
 
+              {/* Date de Naissance */}
+              <div className="space-y-1">
+                <label className="text-xs text-[#87A0A0] block">Date de Naissance</label>
+                <input
+                  type="date"
+                  disabled={!isVM && formData.id !== currentUser.id}
+                  value={formData.birthDate || ''}
+                  onChange={e => setFormData({ ...formData, birthDate: e.target.value })}
+                  className="w-full bg-[#081619] border border-[#87A0A0]/20 rounded-xl px-4 py-2.5 text-sm text-white focus:border-[#C5A059] focus:outline-none disabled:opacity-50"
+                />
+              </div>
+
               {/* Email */}
               <div className="space-y-1">
-                <label className="text-xs text-[#87A0A0] block">Email / Identifiant de connexion *</label>
+                <label className="text-xs text-[#87A0A0] block">Email Personnel *</label>
                 <input
                   type="email"
                   required
                   disabled={!isVM}
                   value={formData.email || ''}
                   onChange={e => setFormData({ ...formData, email: e.target.value })}
+                  className="w-full bg-[#081619] border border-[#87A0A0]/20 rounded-xl px-4 py-2.5 text-sm text-white focus:border-[#C5A059] focus:outline-none disabled:opacity-50"
+                />
+              </div>
+
+              {/* Identifiant Connexion */}
+              <div className="space-y-1">
+                <label className="text-xs text-[#87A0A0] block">Identifiant Connexion *</label>
+                <input
+                  type="text"
+                  required
+                  disabled={!isVM}
+                  value={formData.loginId || ''}
+                  placeholder="Utiliser l'Email si vide"
+                  onChange={e => setFormData({ ...formData, loginId: e.target.value })}
                   className="w-full bg-[#081619] border border-[#87A0A0]/20 rounded-xl px-4 py-2.5 text-sm text-white focus:border-[#C5A059] focus:outline-none disabled:opacity-50"
                 />
               </div>
@@ -324,6 +360,18 @@ export default function MembersList({
                 />
               </div>
 
+              {/* Date d'Entrée */}
+              <div className="space-y-1">
+                <label className="text-xs text-[#87A0A0] block">Date d'Entrée</label>
+                <input
+                  type="date"
+                  disabled={!isVM}
+                  value={formData.entryDate || ''}
+                  onChange={e => setFormData({ ...formData, entryDate: e.target.value })}
+                  className="w-full bg-[#081619] border border-[#87A0A0]/20 rounded-xl px-4 py-2.5 text-sm text-white focus:border-[#C5A059] focus:outline-none disabled:opacity-50"
+                />
+              </div>
+
               {/* Statut */}
               <div className="space-y-1">
                 <label className="text-xs text-[#87A0A0] block">Statut *</label>
@@ -351,16 +399,13 @@ export default function MembersList({
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   {/* Cotisation Loge */}
                   <div className="space-y-2 bg-[#081619]/40 border border-[#87A0A0]/10 rounded-xl p-4">
-                    <label className="text-xs text-[#87A0A0] block font-semibold">Cotisation Loge</label>
-                    <select
-                      value={formData.lodgeDues || 365}
+                    <label className="text-xs text-[#87A0A0] block font-semibold">Cotisation Loge (€)</label>
+                    <input
+                      type="number"
+                      value={formData.lodgeDues !== undefined ? formData.lodgeDues : 365}
                       onChange={e => setFormData({ ...formData, lodgeDues: Number(e.target.value) })}
-                      className="w-full bg-[#081619] border border-[#87A0A0]/20 rounded-lg p-2 text-xs text-white"
-                    >
-                      <option value={365}>Tarif Plein (365€)</option>
-                      <option value={60}>Tarif Jeune (60€)</option>
-                      <option value={0}>Exonéré (0€)</option>
-                    </select>
+                      className="w-full bg-[#081619] border border-[#87A0A0]/20 rounded-lg p-2 text-xs text-white focus:border-[#C5A059] focus:outline-none"
+                    />
                     <label className="flex items-center gap-2 mt-2 cursor-pointer">
                       <input
                         type="checkbox"
@@ -374,15 +419,13 @@ export default function MembersList({
 
                   {/* Cotisation Ordre */}
                   <div className="space-y-2 bg-[#081619]/40 border border-[#87A0A0]/10 rounded-xl p-4">
-                    <label className="text-xs text-[#87A0A0] block font-semibold">Cotisation Ordre</label>
-                    <select
-                      value={formData.orderDues || 50}
+                    <label className="text-xs text-[#87A0A0] block font-semibold">Cotisation Ordre (€)</label>
+                    <input
+                      type="number"
+                      value={formData.orderDues !== undefined ? formData.orderDues : 50}
                       onChange={e => setFormData({ ...formData, orderDues: Number(e.target.value) })}
-                      className="w-full bg-[#081619] border border-[#87A0A0]/20 rounded-lg p-2 text-xs text-white"
-                    >
-                      <option value={50}>Cotisation Ordre (50€)</option>
-                      <option value={0}>Exonéré (0€)</option>
-                    </select>
+                      className="w-full bg-[#081619] border border-[#87A0A0]/20 rounded-lg p-2 text-xs text-white focus:border-[#C5A059] focus:outline-none"
+                    />
                     <label className="flex items-center gap-2 mt-2 cursor-pointer">
                       <input
                         type="checkbox"
@@ -396,25 +439,21 @@ export default function MembersList({
 
                   {/* Cotisation Élévation */}
                   <div className="space-y-2 bg-[#081619]/40 border border-[#87A0A0]/10 rounded-xl p-4">
-                    <label className="text-xs text-[#87A0A0] block font-semibold">Frais Élévation</label>
-                    <select
-                      value={formData.elevationDues || 0}
+                    <label className="text-xs text-[#87A0A0] block font-semibold">Frais Élévation (€)</label>
+                    <input
+                      type="number"
+                      value={formData.elevationDues !== undefined ? formData.elevationDues : 0}
                       onChange={e => setFormData({ ...formData, elevationDues: Number(e.target.value) })}
-                      className="w-full bg-[#081619] border border-[#87A0A0]/20 rounded-lg p-2 text-xs text-white"
-                    >
-                      <option value={0}>Aucun (0€)</option>
-                      <option value={750}>Passage grade loge bleue (750€)</option>
-                      <option value={1250}>Initiation (1250€)</option>
-                    </select>
+                      className="w-full bg-[#081619] border border-[#87A0A0]/20 rounded-lg p-2 text-xs text-white focus:border-[#C5A059] focus:outline-none"
+                    />
                     <label className="flex items-center gap-2 mt-2 cursor-pointer">
                       <input
                         type="checkbox"
-                        disabled={formData.elevationDues === 0}
                         checked={formData.elevationDuesPaid || false}
                         onChange={e => setFormData({ ...formData, elevationDuesPaid: e.target.checked })}
-                        className="rounded accent-[#0C7A7A] disabled:opacity-40"
+                        className="rounded accent-[#0C7A7A]"
                       />
-                      <span className="text-xs text-[#87A0A0] disabled:opacity-40">Déjà réglé</span>
+                      <span className="text-xs text-[#87A0A0]">Déjà réglé</span>
                     </label>
                   </div>
                 </div>
@@ -493,10 +532,20 @@ export default function MembersList({
                 <div className="flex gap-3 items-start">
                   <Mail className="h-4 w-4 text-[#C5A059] mt-1 shrink-0" />
                   <div>
-                    <span className="text-[10px] text-[#87A0A0] block">EMAIL / IDENTIFIANT</span>
+                    <span className="text-[10px] text-[#87A0A0] block">EMAIL PERSONNEL</span>
                     <span className="text-sm font-semibold text-white">{selectedMember.email}</span>
                   </div>
                 </div>
+
+                {canViewAllDetails && (
+                  <div className="flex gap-3 items-start">
+                    <User className="h-4 w-4 text-[#C5A059] mt-1 shrink-0" />
+                    <div>
+                      <span className="text-[10px] text-[#87A0A0] block">IDENTIFIANT DE CONNEXION</span>
+                      <span className="text-sm font-semibold text-white">{selectedMember.loginId || selectedMember.email}</span>
+                    </div>
+                  </div>
+                )}
 
                 {selectedMember.phone && (
                   <div className="flex gap-3 items-start">
@@ -513,7 +562,9 @@ export default function MembersList({
                     <MapPin className="h-4 w-4 text-[#C5A059] mt-1 shrink-0" />
                     <div>
                       <span className="text-[10px] text-[#87A0A0] block">ADRESSE POSTALE</span>
-                      <span className="text-sm font-semibold text-white">{selectedMember.address}</span>
+                      <span className="text-sm font-semibold text-white">
+                        {canViewAllDetails ? selectedMember.address : '🔒 Confidentiel (Officiers uniquement)'}
+                      </span>
                     </div>
                   </div>
                 )}
@@ -523,12 +574,16 @@ export default function MembersList({
                     <Calendar className="h-4 w-4 text-[#C5A059] mt-1 shrink-0" />
                     <div>
                       <span className="text-[10px] text-[#87A0A0] block">DATE DE NAISSANCE</span>
-                      <span className="text-sm font-semibold text-white">{new Date(selectedMember.birthDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
+                      <span className="text-sm font-semibold text-white">
+                        {canViewAllDetails 
+                          ? new Date(selectedMember.birthDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
+                          : '🔒 Confidentiel (Officiers uniquement)'}
+                      </span>
                     </div>
                   </div>
                 )}
 
-                {(isVM || currentUser.id === selectedMember.id) && (
+                {canViewAllDetails && selectedMember.password && (
                   <div className="flex gap-3 items-start bg-black/25 border border-amber-500/10 rounded-xl p-3">
                     <Lock className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
                     <div>
@@ -549,7 +604,9 @@ export default function MembersList({
                   <Award className="h-4 w-4 text-[#C5A059] mt-1 shrink-0" />
                   <div>
                     <span className="text-[10px] text-[#87A0A0] block">LOGE MÈRE</span>
-                    <span className="text-sm font-semibold text-white">{selectedMember.motherLodge || 'Bénou Ré'}</span>
+                    <span className="text-sm font-semibold text-white">
+                      {canViewAllDetails ? (selectedMember.motherLodge || 'Bénou Ré') : '🔒 Confidentiel'}
+                    </span>
                   </div>
                 </div>
 
@@ -558,7 +615,9 @@ export default function MembersList({
                     <User className="h-4 w-4 text-[#C5A059] mt-1 shrink-0" />
                     <div>
                       <span className="text-[10px] text-[#87A0A0] block">PARRAIN INITIATEUR</span>
-                      <span className="text-sm font-semibold text-white">{selectedMember.sponsor}</span>
+                      <span className="text-sm font-semibold text-white">
+                        {canViewAllDetails ? selectedMember.sponsor : '🔒 Confidentiel'}
+                      </span>
                     </div>
                   </div>
                 )}
@@ -568,7 +627,25 @@ export default function MembersList({
                     <Calendar className="h-4 w-4 text-[#C5A059] mt-1 shrink-0" />
                     <div>
                       <span className="text-[10px] text-[#87A0A0] block">DATE D'INITIATION</span>
-                      <span className="text-sm font-semibold text-white">{new Date(selectedMember.initiationDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
+                      <span className="text-sm font-semibold text-white">
+                        {canViewAllDetails 
+                          ? new Date(selectedMember.initiationDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
+                          : '🔒 Confidentiel'}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {selectedMember.entryDate && (
+                  <div className="flex gap-3 items-start">
+                    <Calendar className="h-4 w-4 text-[#C5A059] mt-1 shrink-0" />
+                    <div>
+                      <span className="text-[10px] text-[#87A0A0] block">DATE D'ENTRÉE</span>
+                      <span className="text-sm font-semibold text-white">
+                        {canViewAllDetails 
+                          ? new Date(selectedMember.entryDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
+                          : '🔒 Confidentiel'}
+                      </span>
                     </div>
                   </div>
                 )}
@@ -586,48 +663,55 @@ export default function MembersList({
             </div>
 
             {/* Treasury card summary */}
-            <div className="bg-[#081619]/60 border border-[#87A0A0]/10 rounded-2xl p-5 space-y-4">
-              <h4 className="text-xs font-mono text-amber-500 uppercase tracking-widest pb-1 border-b border-[#87A0A0]/10">
-                État de Trésorerie
-              </h4>
+            {canViewAllDetails ? (
+              <div className="bg-[#081619]/60 border border-[#87A0A0]/10 rounded-2xl p-5 space-y-4">
+                <h4 className="text-xs font-mono text-amber-500 uppercase tracking-widest pb-1 border-b border-[#87A0A0]/10">
+                  État de Trésorerie
+                </h4>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {/* Lodge Dues */}
-                <div className="flex items-center justify-between bg-black/20 p-3.5 rounded-xl border border-gray-800">
-                  <div>
-                    <span className="text-[10px] text-gray-500 block">COTISATION LOGE</span>
-                    <span className="text-sm font-bold text-white">{selectedMember.lodgeDues} €</span>
-                  </div>
-                  <span className={`px-2.5 py-0.5 rounded text-[10px] font-bold ${selectedMember.lodgeDuesPaid ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'}`}>
-                    {selectedMember.lodgeDuesPaid ? 'RÉGLÉ' : 'À PAYER'}
-                  </span>
-                </div>
-
-                {/* Order Dues */}
-                <div className="flex items-center justify-between bg-black/20 p-3.5 rounded-xl border border-gray-800">
-                  <div>
-                    <span className="text-[10px] text-gray-500 block">COTISATION ORDRE</span>
-                    <span className="text-sm font-bold text-white">{selectedMember.orderDues} €</span>
-                  </div>
-                  <span className={`px-2.5 py-0.5 rounded text-[10px] font-bold ${selectedMember.orderDuesPaid ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'}`}>
-                    {selectedMember.orderDuesPaid ? 'RÉGLÉ' : 'À PAYER'}
-                  </span>
-                </div>
-
-                {/* Elevation Dues */}
-                {selectedMember.elevationDues > 0 && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {/* Lodge Dues */}
                   <div className="flex items-center justify-between bg-black/20 p-3.5 rounded-xl border border-gray-800">
                     <div>
-                      <span className="text-[10px] text-gray-500 block">FRAIS ÉLÉVATION</span>
-                      <span className="text-sm font-bold text-white">{selectedMember.elevationDues} €</span>
+                      <span className="text-[10px] text-gray-500 block">COTISATION LOGE</span>
+                      <span className="text-sm font-bold text-white">{selectedMember.lodgeDues} €</span>
                     </div>
-                    <span className={`px-2.5 py-0.5 rounded text-[10px] font-bold ${selectedMember.elevationDuesPaid ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'}`}>
-                      {selectedMember.elevationDuesPaid ? 'RÉGLÉ' : 'À PAYER'}
+                    <span className={`px-2.5 py-0.5 rounded text-[10px] font-bold ${selectedMember.lodgeDuesPaid ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'}`}>
+                      {selectedMember.lodgeDuesPaid ? 'RÉGLÉ' : 'À PAYER'}
                     </span>
                   </div>
-                )}
+
+                  {/* Order Dues */}
+                  <div className="flex items-center justify-between bg-black/20 p-3.5 rounded-xl border border-gray-800">
+                    <div>
+                      <span className="text-[10px] text-gray-500 block">COTISATION ORDRE</span>
+                      <span className="text-sm font-bold text-white">{selectedMember.orderDues} €</span>
+                    </div>
+                    <span className={`px-2.5 py-0.5 rounded text-[10px] font-bold ${selectedMember.orderDuesPaid ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'}`}>
+                      {selectedMember.orderDuesPaid ? 'RÉGLÉ' : 'À PAYER'}
+                    </span>
+                  </div>
+
+                  {/* Elevation Dues */}
+                  {selectedMember.elevationDues > 0 && (
+                    <div className="flex items-center justify-between bg-black/20 p-3.5 rounded-xl border border-gray-800">
+                      <div>
+                        <span className="text-[10px] text-gray-500 block">FRAIS ÉLÉVATION</span>
+                        <span className="text-sm font-bold text-white">{selectedMember.elevationDues} €</span>
+                      </div>
+                      <span className={`px-2.5 py-0.5 rounded text-[10px] font-bold ${selectedMember.elevationDuesPaid ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'}`}>
+                        {selectedMember.elevationDuesPaid ? 'RÉGLÉ' : 'À PAYER'}
+                      </span>
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="bg-[#081619]/30 border border-[#87A0A0]/10 rounded-2xl p-5 flex items-center justify-center gap-3 text-gray-500">
+                <Lock className="h-4 w-4 text-amber-500/50 shrink-0" />
+                <span className="text-[10px] font-mono uppercase tracking-wider">État de Trésorerie confidentiel (Officiers uniquement)</span>
+              </div>
+            )}
           </div>
         )}
 

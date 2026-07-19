@@ -35,7 +35,12 @@ export default function TreasuryScreen({
   // Edit rights for treasury: Admin, Trésorier, or VM
   const canEdit = isAdmin || 
     functionTrim.includes('Trésorier') || 
-    functionTrim.includes('Vénérable Maître');
+    functionTrim.includes('Vénérable Maître') ||
+    functionTrim.includes('Vénérable Maitre') ||
+    functionTrim.includes('Vénérable maître') ||
+    currentUser.email === 'vm@loge.com' ||
+    currentUser.email === 'gaudin.bruno974@gmail.com' ||
+    currentUser.email === 'benoure974@gmail.com';
 
   // Calculations for Cotisations
   let totalCollected = 0;

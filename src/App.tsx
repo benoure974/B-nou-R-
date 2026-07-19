@@ -9,10 +9,25 @@ import {
   initialMembers, 
   initialSessions, 
   initialVisitors, 
-  initialDriveFiles, 
-  getStoredData, 
-  setStoredData 
+  initialDriveFiles 
 } from './data';
+
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth } from './firebase';
+import { 
+  seedFirestoreIfEmpty,
+  subscribeToCollection,
+  logoutFromFirebase,
+  addMemberToFirestore,
+  updateMemberInFirestore,
+  deleteMemberFromFirestore,
+  addSessionToFirestore,
+  updateSessionInFirestore,
+  deleteSessionFromFirestore,
+  addVisitorToFirestore,
+  updateVisitorInFirestore,
+  deleteVisitorFromFirestore
+} from './lib/firebaseSync';
 
 import LoginScreen from './components/LoginScreen';
 import ParvisScreen from './components/ParvisScreen';
@@ -21,83 +36,121 @@ import SessionsList from './components/SessionsList';
 import VisitorsList from './components/VisitorsList';
 import LibraryViewer from './components/LibraryViewer';
 import TreasuryScreen from './components/TreasuryScreen';
+import PlancheTraceeScreen from './components/PlancheTraceeScreen';
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<Member | null>(null);
   const [currentView, setCurrentView] = useState<string>('parvis');
+  const [authLoading, setAuthLoading] = useState<boolean>(true);
 
-  // Load from local storage or pre-seeded data for complete persistence
-  const [members, setMembers] = useState<Member[]>(() => 
-    getStoredData<Member[]>('lodge_members', initialMembers)
-  );
-  const [sessions, setSessions] = useState<Session[]>(() => 
-    getStoredData<Session[]>('lodge_sessions', initialSessions)
-  );
-  const [visitors, setVisitors] = useState<Visitor[]>(() => 
-    getStoredData<Visitor[]>('lodge_visitors', initialVisitors)
-  );
+  const [members, setMembers] = useState<Member[]>(initialMembers);
+  const [sessions, setSessions] = useState<Session[]>(initialSessions);
+  const [visitors, setVisitors] = useState<Visitor[]>(initialVisitors);
   const [driveFiles] = useState<DriveFile[]>(initialDriveFiles);
 
-  // Sync state changes to local storage
+  // Seed Firestore on startup if empty
   useEffect(() => {
-    setStoredData('lodge_members', members);
-  }, [members]);
+    seedFirestoreIfEmpty();
+  }, []);
 
+  // Sync state changes from Firebase
   useEffect(() => {
-    setStoredData('lodge_sessions', sessions);
-  }, [sessions]);
+    let currentFirebaseUser: any = null;
 
-  useEffect(() => {
-    setStoredData('lodge_visitors', visitors);
-  }, [visitors]);
-
-  // Keep current user updated if they modify their own profile
-  useEffect(() => {
-    if (currentUser) {
-      const updatedUser = members.find(m => m.id === currentUser.id);
-      if (updatedUser) {
-        setCurrentUser(updatedUser);
+    // Real-time subscription to members (always active)
+    const unsubMembers = subscribeToCollection<Member>('members', (updatedMembers) => {
+      setMembers(updatedMembers);
+      
+      // Auto-match current user if signed in
+      if (currentFirebaseUser) {
+        const matchedProfile = updatedMembers.find(
+          m => m.email.toLowerCase() === currentFirebaseUser.email?.toLowerCase()
+        );
+        if (matchedProfile) {
+          setCurrentUser(matchedProfile);
+        }
       }
-    }
-  }, [members]);
+    });
+
+    // Real-time subscription to sessions (always active)
+    const unsubSessions = subscribeToCollection<Session>('sessions', (updatedSessions) => {
+      const sorted = [...updatedSessions].sort(
+        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+      );
+      setSessions(sorted);
+    });
+
+    // Real-time subscription to visitors (always active)
+    const unsubVisitors = subscribeToCollection<Visitor>('visitors', (updatedVisitors) => {
+      setVisitors(updatedVisitors);
+    });
+
+    // Handle authentication state
+    const unsubscribeAuth = onAuthStateChanged(auth, (firebaseUser) => {
+      currentFirebaseUser = firebaseUser;
+      if (firebaseUser) {
+        // Auto-match current user by email on auth state change
+        setMembers((currentMembers) => {
+          const matchedProfile = currentMembers.find(
+            m => m.email.toLowerCase() === firebaseUser.email?.toLowerCase()
+          );
+          if (matchedProfile) {
+            setCurrentUser(matchedProfile);
+          }
+          return currentMembers;
+        });
+        setAuthLoading(false);
+      } else {
+        setCurrentUser(null);
+        setAuthLoading(false);
+      }
+    });
+
+    return () => {
+      unsubMembers();
+      unsubSessions();
+      unsubVisitors();
+      unsubscribeAuth();
+    };
+  }, []);
 
   // Member actions
-  const handleAddMember = (newMember: Member) => {
-    setMembers(prev => [...prev, newMember]);
+  const handleAddMember = async (newMember: Member) => {
+    await addMemberToFirestore(newMember);
   };
 
-  const handleUpdateMember = (updatedMember: Member) => {
-    setMembers(prev => prev.map(m => m.id === updatedMember.id ? updatedMember : m));
+  const handleUpdateMember = async (updatedMember: Member) => {
+    await updateMemberInFirestore(updatedMember);
   };
 
-  const handleDeleteMember = (id: string) => {
-    setMembers(prev => prev.filter(m => m.id !== id));
+  const handleDeleteMember = async (id: string) => {
+    await deleteMemberFromFirestore(id);
   };
 
   // Session actions
-  const handleAddSession = (newSession: Session) => {
-    setSessions(prev => [newSession, ...prev]);
+  const handleAddSession = async (newSession: Session) => {
+    await addSessionToFirestore(newSession);
   };
 
-  const handleUpdateSession = (updatedSession: Session) => {
-    setSessions(prev => prev.map(s => s.id === updatedSession.id ? updatedSession : s));
+  const handleUpdateSession = async (updatedSession: Session) => {
+    await updateSessionInFirestore(updatedSession);
   };
 
-  const handleDeleteSession = (id: string) => {
-    setSessions(prev => prev.filter(s => s.id !== id));
+  const handleDeleteSession = async (id: string) => {
+    await deleteSessionFromFirestore(id);
   };
 
   // Visitor actions
-  const handleAddVisitor = (newVisitor: Visitor) => {
-    setVisitors(prev => [...prev, newVisitor]);
+  const handleAddVisitor = async (newVisitor: Visitor) => {
+    await addVisitorToFirestore(newVisitor);
   };
 
-  const handleUpdateVisitor = (updatedVisitor: Visitor) => {
-    setVisitors(prev => prev.map(v => v.id === updatedVisitor.id ? updatedVisitor : v));
+  const handleUpdateVisitor = async (updatedVisitor: Visitor) => {
+    await updateVisitorInFirestore(updatedVisitor);
   };
 
-  const handleDeleteVisitor = (id: string) => {
-    setVisitors(prev => prev.filter(v => v.id !== id));
+  const handleDeleteVisitor = async (id: string) => {
+    await deleteVisitorFromFirestore(id);
   };
 
   const handleLoginSuccess = (user: Member) => {
@@ -105,10 +158,24 @@ export default function App() {
     setCurrentView('parvis');
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await logoutFromFirebase();
     setCurrentUser(null);
     setCurrentView('parvis');
   };
+
+  // Beautiful Masonic loading screen
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-[#040D10] text-[#87A0A0] flex flex-col items-center justify-center font-sans">
+        <div className="relative flex items-center justify-center">
+          <div className="absolute w-24 h-24 border-t-2 border-b-2 border-[#C5A059]/40 rounded-full animate-spin"></div>
+          <div className="text-3xl font-extralight text-[#C5A059] tracking-widest relative z-10">B∴R∴</div>
+        </div>
+        <div className="mt-8 text-xs tracking-widest text-[#87A0A0]/60 uppercase">Chargement du Temple...</div>
+      </div>
+    );
+  }
 
   // Render proper screen view based on current state
   if (!currentUser) {
@@ -124,6 +191,7 @@ export default function App() {
           sessions={sessions}
           onLogout={handleLogout} 
           onNavigate={setCurrentView} 
+          onUpdateMember={handleUpdateMember}
         />
       );
     case 'membres':
@@ -198,6 +266,17 @@ export default function App() {
           onBack={() => setCurrentView('parvis')}
         />
       );
+    case 'planche_tracee':
+      return (
+        <PlancheTraceeScreen
+          currentUser={currentUser}
+          sessions={sessions}
+          members={members}
+          visitors={visitors}
+          onUpdateSession={handleUpdateSession}
+          onBack={() => setCurrentView('parvis')}
+        />
+      );
     default:
       return (
         <ParvisScreen 
@@ -206,6 +285,7 @@ export default function App() {
           sessions={sessions}
           onLogout={handleLogout} 
           onNavigate={setCurrentView} 
+          onUpdateMember={handleUpdateMember}
         />
       );
   }

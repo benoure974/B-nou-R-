@@ -10,7 +10,8 @@ import {
   LogOut,
   Sparkles,
   HelpCircle,
-  MapPin
+  MapPin,
+  FileText
 } from 'lucide-react';
 import { Member, Session } from '../types';
 import DashboardStats from './DashboardStats';
@@ -21,6 +22,7 @@ interface ParvisScreenProps {
   sessions: Session[];
   onLogout: () => void;
   onNavigate: (view: string) => void;
+  onUpdateMember: (updatedMember: Member) => void;
 }
 
 export default function ParvisScreen({ 
@@ -28,7 +30,8 @@ export default function ParvisScreen({
   members, 
   sessions, 
   onLogout, 
-  onNavigate 
+  onNavigate,
+  onUpdateMember
 }: ParvisScreenProps) {
   // Check roles for menu accessibility
   const functionTrim = (currentUser.function || '').trim();
@@ -41,6 +44,10 @@ export default function ParvisScreen({
     
   const isVisitorsUser = isAdmin || 
     functionTrim.includes('Vénérable Maître') || 
+    functionTrim.includes('Secrétaire');
+
+  const isPlancheTraceeUser = isAdmin ||
+    functionTrim.includes('Vénérable Maître') ||
     functionTrim.includes('Secrétaire');
 
   const menuItems = [
@@ -67,6 +74,14 @@ export default function ParvisScreen({
       icon: ShieldAlert,
       color: 'text-emerald-400 border-emerald-500/20 bg-emerald-500/5',
       visible: isVisitorsUser
+    },
+    {
+      id: 'planche_tracee',
+      title: 'Planche Tracée',
+      subtitle: 'Comptes rendus officiels',
+      icon: FileText,
+      color: 'text-amber-500 border-amber-500/20 bg-amber-500/5',
+      visible: isPlancheTraceeUser
     },
     {
       id: 'architecture',
@@ -159,7 +174,7 @@ export default function ParvisScreen({
 
           <div className="border border-amber-500/20 bg-amber-500/5 rounded-xl p-3 px-4 text-xs font-mono text-amber-400 self-stretch md:self-auto flex flex-col justify-center text-center">
             <span className="text-[10px] tracking-widest text-[#87A0A0] uppercase mb-0.5 block">DEVISE DE L'ORDRE</span>
-            <span>NON NOBIS DOMINE, NON NOBIS SED NOMINI TUO DA GLORIAM</span>
+            <span>EX CINERIBUS, AD LUCEM PERPETUAM</span>
           </div>
         </div>
 
@@ -203,7 +218,7 @@ export default function ParvisScreen({
 
         {/* Dashboard Statistics Panel */}
         <div className="mt-10">
-          <DashboardStats members={members} sessions={sessions} />
+          <DashboardStats members={members} sessions={sessions} currentUser={currentUser} onUpdateMember={onUpdateMember} />
         </div>
 
         {/* Informative Status / Guard Rail */}

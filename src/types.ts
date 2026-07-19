@@ -47,6 +47,19 @@ export interface Session {
   agapeTime: string; // "20:00"
   agapeType: 'Agape partage' | 'Agape offerte' | 'Agape avec médaille';
   agapePrice: number;
+  sessionNumber?: string;
+  deityName?: string;
+  egyptianYear?: string;
+  vmName?: string;
+  customLines?: string[];
+  agapeText?: string;
+  contactText?: string;
+  plancheDraftText?: string;
+  plancheValidated?: boolean;
+  isValidated?: boolean;
+  plancheSecretarySigned?: boolean;
+  plancheVMSigned?: boolean;
+  sacPropositions?: string;
 }
 
 export interface Visitor {
@@ -57,6 +70,7 @@ export interface Visitor {
   orient: string;
   obedience: string;
   email: string;
+  phone: string;
 }
 
 export interface DriveFile {

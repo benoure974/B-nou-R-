@@ -1,0 +1,111 @@
+{
+  "entities": {
+    "Member": {
+      "title": "Member",
+      "description": "Lodge member",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "firstName": { "type": "string" },
+        "lastName": { "type": "string" },
+        "address": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string" },
+        "matricule": { "type": "string" },
+        "grade": { "type": "string", "enum": ["Apprenti", "Compagnon", "Maitre"] },
+        "function": { "type": "string" },
+        "motherLodge": { "type": "string" },
+        "sponsor": { "type": "string" },
+        "loginId": { "type": "string" },
+        "password": { "type": "string" },
+        "birthDate": { "type": "string" },
+        "initiationDate": { "type": "string" },
+        "entryDate": { "type": "string" },
+        "status": { "type": "string", "enum": ["Actif", "Honoraire", "En sommeil", "Démissionnaire", "Radié"] },
+        "lodgeDues": { "type": "number" },
+        "lodgeDuesPaid": { "type": "boolean" },
+        "orderDues": { "type": "number" },
+        "orderDuesPaid": { "type": "boolean" },
+        "elevationDues": { "type": "number" },
+        "elevationDuesPaid": { "type": "boolean" },
+        "isAdmin": { "type": "boolean" }
+      },
+      "required": ["id", "firstName", "lastName", "email", "matricule", "grade", "status"]
+    },
+    "Session": {
+      "title": "Session",
+      "description": "Lodge session",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "date": { "type": "string" },
+        "degree": { "type": "string" },
+        "type": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "location": { "type": "string" },
+        "presentIds": { "type": "array" },
+        "excusedIds": { "type": "array" },
+        "visitorIds": { "type": "array" },
+        "troncAmount": { "type": "number" },
+        "signatures": { "type": "object" },
+        "closingTime": { "type": "string" },
+        "agenda1": { "type": "string" },
+        "agenda2": { "type": "string" },
+        "agenda3": { "type": "string" },
+        "agenda4": { "type": "string" },
+        "hasAgape": { "type": "boolean" },
+        "agapeTime": { "type": "string" },
+        "agapeType": { "type": "string" },
+        "agapePrice": { "type": "number" },
+        "sessionNumber": { "type": "string" },
+        "deityName": { "type": "string" },
+        "egyptianYear": { "type": "string" },
+        "vmName": { "type": "string" },
+        "customLines": { "type": "array" },
+        "agapeText": { "type": "string" },
+        "contactText": { "type": "string" }
+      }
+    },
+    "Config": {
+      "title": "Config",
+      "description": "Global configuration settings",
+      "type": "object",
+      "properties": {
+        "regularSessionChrono": { "type": "number" }
+      }
+    },
+    "Visitor": {
+      "title": "Visitor",
+      "description": "Lodge visitor",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "firstName": { "type": "string" },
+        "lastName": { "type": "string" },
+        "lodge": { "type": "string" },
+        "orient": { "type": "string" },
+        "obedience": { "type": "string" },
+        "email": { "type": "string" }
+      }
+    }
+  },
+  "firestore": {
+    "/members/{memberId}": {
+      "schema": "Member",
+      "description": "Lodge members"
+    },
+    "/sessions/{sessionId}": {
+      "schema": "Session",
+      "description": "Lodge sessions"
+    },
+    "/config/{configId}": {
+      "schema": "Config",
+      "description": "Global settings"
+    },
+    "/visitors/{visitorId}": {
+      "schema": "Visitor",
+      "description": "Lodge visitors"
+    }
+  }
+}

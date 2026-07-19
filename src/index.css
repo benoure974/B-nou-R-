@@ -56,16 +56,27 @@
 
 /* Print CSS Styles - guarantees flawless PDF representation of Convocations / Attendance sheets */
 @media print {
+  @page {
+    size: A4 portrait;
+    margin: 6mm 10mm 6mm 10mm; /* Dynamic margins to prevent page overflow */
+  }
+
   body {
     background-color: white !important;
     color: black !important;
     font-family: Georgia, serif !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
   
   /* Hide the web UI elements during native print operation */
   header,
   footer,
   button,
+  nav,
+  aside,
   .print\:hidden {
     display: none !important;
   }
@@ -76,8 +87,17 @@
     padding: 0 !important;
     margin: 0 !important;
     width: 100% !important;
+    height: 100vh !important;
+    max-height: 285mm !important; /* Force content on a single physical sheet */
     background-color: white !important;
     color: black !important;
+    page-break-inside: avoid !important;
+    page-break-after: avoid !important;
+    page-break-before: avoid !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
+    box-sizing: border-box !important;
   }
 
   table {
@@ -89,5 +109,6 @@
     border: 1px solid #333 !important;
     color: black !important;
     background-color: white !important;
+    padding: 4px 8px !important; /* Elegant compact padding for A4 tables */
   }
 }

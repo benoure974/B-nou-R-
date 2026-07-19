@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Eye, Mail, Lock, LogIn, Sparkles, CheckCircle2 } from 'lucide-react';
 import { Member } from '../types';
+import { loginWithFirebase, initializeAllAccountsAndDatabase } from '../lib/firebaseSync';
 
 interface LoginScreenProps {
   members: Member[];
@@ -14,6 +15,11 @@ export default function LoginScreen({ members, onLoginSuccess }: LoginScreenProp
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Firebase initialization state
+  const [initStatus, setInitStatus] = useState<string | null>(null);
+  const [initProgress, setInitProgress] = useState<number>(0);
+  const [isInitializing, setIsInitializing] = useState<boolean>(false);
+
   useEffect(() => {
     // Load saved email if remember is set
     const saved = localStorage.getItem('remember_email');
@@ -23,27 +29,18 @@ export default function LoginScreen({ members, onLoginSuccess }: LoginScreenProp
     }
   }, []);
 
-  const handleLogin = (e?: React.FormEvent) => {
+  const handleLogin = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setIsLoading(true);
     setError(null);
 
-    setTimeout(() => {
+    try {
+      await loginWithFirebase(email, password);
+
+      const searchEmail = email.trim().toLowerCase() === 'vm@loge.com' ? 'gaudin.bruno974@gmail.com' : email.trim().toLowerCase();
       const match = members.find(
-        (m) => m.loginId.toLowerCase().trim() === email.toLowerCase().trim()
+        (m) => m.email.toLowerCase().trim() === searchEmail
       );
-
-      if (!match) {
-        setError('Utilisateur inconnu. Veuillez vérifier votre email de connexion.');
-        setIsLoading(false);
-        return;
-      }
-
-      if (match.password !== password) {
-        setError('Mauvais mot de passe. Veuillez réessayer.');
-        setIsLoading(false);
-        return;
-      }
 
       if (rememberEmail) {
         localStorage.setItem('remember_email', email);
@@ -51,22 +48,59 @@ export default function LoginScreen({ members, onLoginSuccess }: LoginScreenProp
         localStorage.removeItem('remember_email');
       }
 
+      if (match) {
+        onLoginSuccess(match);
+      }
+    } catch (err: any) {
+      console.error(err);
+      if (err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential') {
+        setError('Identifiants incorrects. Veuillez vérifier votre email et mot de passe.');
+      } else {
+        setError(err.message || 'Une erreur est survenue lors de la connexion.');
+      }
+    } finally {
       setIsLoading(false);
-      onLoginSuccess(match);
-    }, 600);
+    }
   };
 
-  const handleQuickLogin = (roleEmail: string) => {
+  const handleQuickLogin = async (roleEmail: string) => {
     setEmail(roleEmail);
     setPassword('password123');
-    // Autologin in next frame or immediately
-    const found = members.find((m) => m.loginId === roleEmail);
-    if (found) {
-      setIsLoading(true);
-      setTimeout(() => {
-        setIsLoading(false);
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      await loginWithFirebase(roleEmail, 'password123');
+      const found = members.find((m) => m.email === roleEmail);
+      if (found) {
         onLoginSuccess(found);
-      }, 300);
+      }
+    } catch (err: any) {
+      console.error(err);
+      setError('Une erreur est survenue lors du raccourci de connexion.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleInitializeFirebase = async () => {
+    setIsInitializing(true);
+    setInitProgress(0);
+    setInitStatus("Initialisation du Temple commencée...");
+    try {
+      await initializeAllAccountsAndDatabase((status, progress) => {
+        setInitStatus(status);
+        setInitProgress(progress);
+      });
+      // Allow user to see 100% complete
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      setIsInitializing(false);
+      setInitStatus(null);
+    } catch (err: any) {
+      console.error(err);
+      setError("Erreur lors de l'initialisation de Firebase : " + (err.message || err));
+      setIsInitializing(false);
+      setInitStatus(null);
     }
   };
 
@@ -194,43 +228,122 @@ export default function LoginScreen({ members, onLoginSuccess }: LoginScreenProp
               Accès Rapide (Démo / Test)
             </h4>
             <div className="grid grid-cols-2 gap-2 text-xs">
+              {/* VM */}
               <button
-                onClick={() => handleQuickLogin('vm@loge.com')}
+                onClick={() => handleQuickLogin('gaudin.bruno974@gmail.com')}
                 className="bg-[#081619]/60 hover:bg-[#081619] border border-[#87A0A0]/20 rounded-lg p-2 flex flex-col items-center transition hover:border-[#C5A059]/40 group"
               >
-                <span className="font-semibold text-amber-400 text-[11px] group-hover:text-amber-300 transition">Vénérable Maître</span>
-                <span className="text-[9px] text-gray-500">vm@loge.com</span>
+                <span className="font-semibold text-amber-400 text-[11px] group-hover:text-amber-300 transition">VM (Bruno)</span>
+                <span className="text-[9px] text-gray-500">gaudin.bruno974@gmail.com</span>
               </button>
+
+              {/* Secrétaire */}
               <button
-                onClick={() => handleQuickLogin('secretaire@loge.com')}
+                onClick={() => handleQuickLogin('muriel.mete.mm@gmail.com')}
                 className="bg-[#081619]/60 hover:bg-[#081619] border border-[#87A0A0]/20 rounded-lg p-2 flex flex-col items-center transition hover:border-[#C5A059]/40 group"
               >
-                <span className="font-semibold text-[#87A0A0] text-[11px] group-hover:text-[#E8E8E8] transition">Secrétaire</span>
-                <span className="text-[9px] text-gray-500">secretaire@loge.com</span>
+                <span className="font-semibold text-amber-400 text-[11px] group-hover:text-amber-300 transition">Secrétaire (Muriel)</span>
+                <span className="text-[9px] text-gray-500 font-mono text-amber-500/50">muriel.mete.mm@gmail.com</span>
               </button>
+
+              {/* Trésorier */}
               <button
-                onClick={() => handleQuickLogin('tresorier@loge.com')}
+                onClick={() => handleQuickLogin('gaudin.noah974@gmail.com')}
                 className="bg-[#081619]/60 hover:bg-[#081619] border border-[#87A0A0]/20 rounded-lg p-2 flex flex-col items-center transition hover:border-[#C5A059]/40 group"
               >
-                <span className="font-semibold text-[#87A0A0] text-[11px] group-hover:text-[#E8E8E8] transition">Trésorière</span>
-                <span className="text-[9px] text-gray-500">tresorier@loge.com</span>
+                <span className="font-semibold text-amber-400 text-[11px] group-hover:text-amber-300 transition">Trésorier (Noah)</span>
+                <span className="text-[9px] text-gray-500 font-mono text-amber-500/50">gaudin.noah974@gmail.com</span>
               </button>
+
+              {/* Maître */}
               <button
-                onClick={() => handleQuickLogin('membre@loge.com')}
+                onClick={() => handleQuickLogin('philippe.costille@gmail.com')}
                 className="bg-[#081619]/60 hover:bg-[#081619] border border-[#87A0A0]/20 rounded-lg p-2 flex flex-col items-center transition hover:border-[#C5A059]/40 group"
               >
-                <span className="font-semibold text-[#87A0A0] text-[11px] group-hover:text-[#E8E8E8] transition">Apprenti</span>
-                <span className="text-[9px] text-gray-500">membre@loge.com</span>
+                <span className="font-semibold text-[#87A0A0] text-[11px] group-hover:text-[#E8E8E8] transition">Maître (Philippe)</span>
+                <span className="text-[9px] text-gray-500">philippe.costille@gmail.com</span>
               </button>
+
+              {/* Compagnon */}
+              <button
+                onClick={() => handleQuickLogin('aure.costille@gmail.com')}
+                className="bg-[#081619]/60 hover:bg-[#081619] border border-[#87A0A0]/20 rounded-lg p-2 flex flex-col items-center transition hover:border-[#C5A059]/40 group"
+              >
+                <span className="font-semibold text-[#87A0A0] text-[11px] group-hover:text-[#E8E8E8] transition">Compagnon (Aure)</span>
+                <span className="text-[9px] text-gray-500">aure.costille@gmail.com</span>
+              </button>
+
+              {/* Apprenti */}
+              <button
+                onClick={() => handleQuickLogin('sacha.costille@gmail.com')}
+                className="bg-[#081619]/60 hover:bg-[#081619] border border-[#87A0A0]/20 rounded-lg p-2 flex flex-col items-center transition hover:border-[#C5A059]/40 group"
+              >
+                <span className="font-semibold text-[#87A0A0] text-[11px] group-hover:text-[#E8E8E8] transition">Apprenti (Sacha)</span>
+                <span className="text-[9px] text-gray-500">sacha.costille@gmail.com</span>
+              </button>
+            </div>
+
+            {/* Firebase Database & Authentication Seeder */}
+            <div className="mt-5 pt-4 border-t border-[#87A0A0]/10 flex flex-col items-center">
+              <button
+                type="button"
+                onClick={handleInitializeFirebase}
+                className="w-full py-2.5 px-3 bg-[#081619]/80 border border-amber-500/30 rounded-xl text-[10px] tracking-wider text-[#C5A059] uppercase hover:bg-amber-500/10 hover:border-amber-500/60 transition flex items-center justify-center gap-2 hover:shadow-md hover:shadow-amber-500/5 active:translate-y-px"
+              >
+                <Sparkles className="h-3.5 w-3.5 text-amber-500 animate-pulse" />
+                Initialiser la collection & Comptes (Firebase)
+              </button>
+              <p className="text-[9px] text-[#87A0A0]/50 text-center mt-2 leading-tight">
+                Crée automatiquement la collection <strong>membres</strong> et pré-enregistre les 9 comptes dans Firebase Authentication avec le mot de passe "password123".
+              </p>
             </div>
           </div>
         </div>
 
         {/* Footer info */}
         <p className="text-center text-[10px] text-[#87A0A0]/40 font-mono mt-8">
-          NON NOBIS DOMINE, NON NOBIS, SED NOMINI TUO DA GLORIAM
+          EX CINERIBUS, AD LUCEM PERPETUAM
         </p>
       </div>
+
+      {/* Beautiful Masonic Progress Overlay */}
+      {isInitializing && (
+        <div className="fixed inset-0 bg-[#040D10]/95 backdrop-blur-md flex flex-col items-center justify-center z-50 p-6 select-none animate-fadeIn">
+          <div className="bg-[#122428] border border-amber-500/40 rounded-2xl p-8 max-w-md w-full text-center space-y-6 shadow-2xl relative">
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-amber-500/20 border border-amber-500/40 text-amber-500 text-[9px] font-mono tracking-widest px-4 py-0.5 rounded-full uppercase">
+              RÉGÉNÉRATION DU TEMPLE
+            </div>
+
+            <div className="relative flex items-center justify-center py-4">
+              <div className="absolute w-20 h-20 border-t-2 border-b-2 border-amber-500/60 rounded-full animate-spin"></div>
+              <div className="text-xl font-extralight text-amber-500 tracking-widest relative z-10 font-mono">B∴R∴</div>
+            </div>
+
+            <h3 className="text-base font-semibold text-[#E8E8E8] tracking-wider uppercase font-sans">
+              Configuration de Firebase
+            </h3>
+
+            <div className="bg-[#081619]/60 border border-[#87A0A0]/10 rounded-xl p-4 min-h-[5rem] flex items-center justify-center">
+              <p className="text-xs text-[#87A0A0] leading-relaxed">
+                {initStatus}
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <div className="w-full bg-[#081619] rounded-full h-2.5 overflow-hidden border border-[#87A0A0]/20">
+                <div 
+                  className="bg-[#0C7A7A] h-full transition-all duration-300 rounded-full shadow-lg shadow-[#0C7A7A]/40"
+                  style={{ width: `${initProgress}%` }}
+                />
+              </div>
+              <div className="flex justify-between items-center text-[10px] font-mono text-[#87A0A0]">
+                <span className="text-[#87A0A0]/60">SÉCURISATION & SYNCHRONISATION</span>
+                <span className="text-amber-500 font-bold">{initProgress}%</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

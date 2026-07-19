@@ -7,10 +7,12 @@ import {
   Award, 
   MapPin, 
   Mail, 
+  Phone,
   Trash2, 
   Edit2, 
   CheckCircle,
-  HelpCircle
+  HelpCircle,
+  Lock
 } from 'lucide-react';
 import { Visitor, Member } from '../types';
 
@@ -39,6 +41,28 @@ export default function VisitorsList({
   const isAdmin = currentUser.isAdmin || false;
   const isSecOrVM = isAdmin || functionTrim.includes('Vénérable Maître') || functionTrim.includes('Secrétaire');
 
+  if (!isSecOrVM) {
+    return (
+      <div className="min-h-screen bg-[#081619] text-[#E8E8E8] pb-12 flex flex-col items-center justify-center p-4">
+        <div className="max-w-md w-full bg-[#122428] border border-red-500/20 rounded-2xl p-8 text-center space-y-6">
+          <div className="h-16 w-16 mx-auto rounded-full bg-red-950/20 border border-red-500/30 flex items-center justify-center text-red-500">
+            <Lock className="h-8 w-8" />
+          </div>
+          <h3 className="font-sans text-lg font-bold text-white uppercase tracking-wider">Accès Restreint</h3>
+          <p className="text-sm text-[#87A0A0] leading-relaxed">
+            Seuls le <strong>Vénérable Maître</strong> et le <strong>Secrétaire</strong> sont habilités à consulter ou modifier les fiches des visiteurs de l'Atelier.
+          </p>
+          <button
+            onClick={onBack}
+            className="w-full py-2.5 rounded-xl bg-teal-950/40 border border-teal-900/30 text-teal-400 hover:bg-teal-900/20 transition font-bold text-xs tracking-wider uppercase"
+          >
+            Retour au Parvis
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   const handleStartCreate = () => {
     setFormData({
       id: 'v_' + Date.now(),
@@ -47,7 +71,8 @@ export default function VisitorsList({
       lodge: '',
       orient: '',
       obedience: '',
-      email: ''
+      email: '',
+      phone: ''
     });
     setShowFormModal(true);
   };
@@ -85,7 +110,11 @@ export default function VisitorsList({
   const filteredVisitors = visitors.filter(v => {
     const fullName = `${v.firstName} ${v.lastName}`.toLowerCase();
     const query = searchQuery.toLowerCase();
-    return fullName.includes(query) || v.lodge.toLowerCase().includes(query) || v.orient.toLowerCase().includes(query) || v.email.toLowerCase().includes(query);
+    return fullName.includes(query) || 
+      v.lodge.toLowerCase().includes(query) || 
+      v.orient.toLowerCase().includes(query) || 
+      (v.email && v.email.toLowerCase().includes(query)) ||
+      (v.phone && v.phone.toLowerCase().includes(query));
   });
 
   return (
@@ -153,14 +182,26 @@ export default function VisitorsList({
                 </div>
               </div>
 
-              <div className="space-y-1">
-                <label className="text-xs text-[#87A0A0]">Adresse Email</label>
-                <input
-                  type="email"
-                  value={formData.email || ''}
-                  onChange={e => setFormData({ ...formData, email: e.target.value })}
-                  className="w-full bg-[#081619] border border-[#87A0A0]/20 rounded-xl px-3.5 py-2 text-white focus:border-[#C5A059] focus:outline-none"
-                />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-xs text-[#87A0A0]">Adresse Email</label>
+                  <input
+                    type="email"
+                    value={formData.email || ''}
+                    onChange={e => setFormData({ ...formData, email: e.target.value })}
+                    className="w-full bg-[#081619] border border-[#87A0A0]/20 rounded-xl px-3.5 py-2 text-white focus:border-[#C5A059] focus:outline-none"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-[#87A0A0]">Téléphone</label>
+                  <input
+                    type="text"
+                    placeholder="ex: 06 92 12 34 56"
+                    value={formData.phone || ''}
+                    onChange={e => setFormData({ ...formData, phone: e.target.value })}
+                    className="w-full bg-[#081619] border border-[#87A0A0]/20 rounded-xl px-3.5 py-2 text-white focus:border-[#C5A059] focus:outline-none"
+                  />
+                </div>
               </div>
 
               <div className="space-y-1">
@@ -274,7 +315,13 @@ export default function VisitorsList({
                       {visitor.email && (
                         <div className="flex items-center gap-1.5">
                           <Mail className="h-3.5 w-3.5 text-[#C5A059]" />
-                          <span>{visitor.email}</span>
+                          <span className="truncate">{visitor.email}</span>
+                        </div>
+                      )}
+                      {visitor.phone && (
+                        <div className="flex items-center gap-1.5">
+                          <Phone className="h-3.5 w-3.5 text-[#C5A059]" />
+                          <span>{visitor.phone}</span>
                         </div>
                       )}
                     </div>
