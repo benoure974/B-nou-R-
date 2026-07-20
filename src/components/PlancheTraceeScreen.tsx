@@ -18,6 +18,7 @@ import {
   ExternalLink
 } from 'lucide-react';
 import { Member, Session, Visitor } from '../types';
+import GoogleDriveArchivePanel from './GoogleDriveArchivePanel';
 
 interface PlancheTraceeScreenProps {
   currentUser: Member;
@@ -480,55 +481,13 @@ L'Ordre du Jour étant épuisé, le Vénérable Maître a clos les travaux en la
               </div>
             </div>
 
-            {/* Google Drive Folder Creation Guide for Validated Tenue */}
+            {/* Google Drive Folder Creation & Automatic Archiving for Validated Tenue */}
             {(selectedSession.plancheValidated || selectedSession.plancheVMSigned) && (
-              <div className="bg-amber-500/5 border border-amber-500/20 rounded-2xl p-5 space-y-4 animate-fade-in">
-                <div className="flex items-start gap-3">
-                  <div className="p-2.5 bg-amber-500/10 rounded-xl text-amber-500 shrink-0">
-                    <FolderOpen className="h-5 w-5" />
-                  </div>
-                  <div className="space-y-1">
-                    <h4 className="text-xs font-bold text-white uppercase font-sans tracking-wider">
-                      Dossier d'Archivage de la Tenue
-                    </h4>
-                    <p className="text-[11px] text-[#87A0A0] leading-relaxed">
-                      La tenue étant validée, veuillez créer son dossier correspondant dans le répertoire de l'Atelier sur Google Drive :
-                    </p>
-                  </div>
-                </div>
-
-                <div className="bg-[#081619] border border-[#87A0A0]/10 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div className="space-y-1">
-                    <span className="text-[8px] text-[#87A0A0] block uppercase font-mono tracking-widest font-bold">NOM RECOMMANDÉ POUR LE RÉPERTOIRE</span>
-                    <span className="text-sm font-mono font-bold text-amber-400 select-all">
-                      {getDriveFolderName(selectedSession)}
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      navigator.clipboard.writeText(getDriveFolderName(selectedSession));
-                      alert("Nom du répertoire copié ! " + getDriveFolderName(selectedSession));
-                    }}
-                    className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-[#122428] border border-amber-500/30 text-amber-400 text-xs font-mono font-semibold hover:bg-amber-500/10 transition"
-                  >
-                    <Copy className="h-3.5 w-3.5" />
-                    COPIER LE NOM
-                  </button>
-                </div>
-
-                <div className="flex justify-end pt-1">
-                  <a
-                    href="https://drive.google.com/drive/folders/11Qp8SXLFG0Spfks-G6OAQ66EHMGjEOgy?usp=drive_link"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-500 text-[#081619] text-xs font-bold hover:bg-amber-400 transition font-mono uppercase tracking-wider shadow-lg shadow-amber-500/5"
-                  >
-                    <ExternalLink className="h-4 w-4" />
-                    Ouvrir le Google Drive
-                  </a>
-                </div>
-              </div>
+              <GoogleDriveArchivePanel 
+                session={selectedSession} 
+                members={members} 
+                visitors={visitors} 
+              />
             )}
 
             {/* MAIN CONTAINER: Rich text Editor or Viewer */}

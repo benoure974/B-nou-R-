@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { Session, Member, Visitor } from '../types';
 import SignaturePad from './SignaturePad';
+import GoogleDriveArchivePanel from './GoogleDriveArchivePanel';
 import { getSessionChronoFromFirestore, incrementSessionChronoInFirestore } from '../lib/firebaseSync';
 
 const visitorPositions = [
@@ -30,8 +31,8 @@ const visitorPositions = [
   "Colonne du Nord",
   "Colonne du Midi",
   "Vénérable Maître",
-  "1er Surveillant",
-  "2e Surveillant",
+  "Premier Surveillant",
+  "Second Surveillant",
   "Secrétaire",
   "Orateur",
   "Trésorier",
@@ -39,7 +40,7 @@ const visitorPositions = [
   "Expert",
   "Maître des Cérémonies",
   "Couvreur",
-  "Maître de Musique (Harmoniste)",
+  "Maitre de la Colonne d'Harmonie",
   "Maître des Banquets"
 ];
 
@@ -75,6 +76,7 @@ export default function SessionsList({
   const [localTronc, setLocalTronc] = useState<number>(0);
   const [deleteConfirmationId, setDeleteConfirmationId] = useState<string | null>(null);
   const [validateConfirmationSession, setValidateConfirmationSession] = useState<Session | null>(null);
+  const [cameDirectlyFromList, setCameDirectlyFromList] = useState(false);
 
   // Email sending states
   const [editorTab, setEditorTab] = useState<'config' | 'email'>('config');
@@ -98,8 +100,8 @@ export default function SessionsList({
     '',
     ''
   ]);
-  const [agapeText, setAgapeText] = useState('Les Travaux seront suivis d’Agapes au nom de la Fraternité en Salle Humide. La médaille est de 15 euros.');
-  const [contactText, setContactText] = useState('Merci aux SS∴ et FF∴ Invités de s’annoncer afin d’ajuster au mieux les Agapes. Tél : 06 93 470 700');
+  const [agapeText, setAgapeText] = useState('Les Travaux seront suivis d’Agapes en Salle Humide. La médaille est de 15 euros.');
+  const [contactText, setContactText] = useState('Merci aux SS∴ et FF∴ Invités de s’annoncer afin d’ajuster au mieux la Tenue et les Agapes. Tél : 06 93 470 700');
   const [formattedHeaderDate, setFormattedHeaderDate] = useState('');
   const [openingTime, setOpeningTime] = useState('10h00');
   const [invitationMainLine, setInvitationMainLine] = useState('');
@@ -576,7 +578,13 @@ export default function SessionsList({
                     IMPRIMER LE DOCUMENT
                   </button>
                   <button
-                    onClick={() => setPdfTypeToShow(null)}
+                    onClick={() => {
+                      setPdfTypeToShow(null);
+                      if (cameDirectlyFromList) {
+                        setSelectedSession(null);
+                        setCameDirectlyFromList(false);
+                      }
+                    }}
                     className="px-4 py-2 rounded-xl bg-[#081619] border border-gray-700 hover:bg-[#122428] text-xs font-bold transition"
                   >
                     FERMER
@@ -590,7 +598,13 @@ export default function SessionsList({
               // Presence preview has no editor side-bar, just print preview like before but beautifully styled
               <div className="flex flex-col gap-6 relative">
                 <button
-                  onClick={() => setPdfTypeToShow(null)}
+                  onClick={() => {
+                    setPdfTypeToShow(null);
+                    if (cameDirectlyFromList) {
+                      setSelectedSession(null);
+                      setCameDirectlyFromList(false);
+                    }
+                  }}
                   className="absolute top-0 right-0 text-gray-400 hover:text-gray-600 font-bold text-xl print:hidden"
                 >
                   ✕
@@ -709,7 +723,13 @@ export default function SessionsList({
 
                 <div className="flex justify-end gap-2 border-t pt-4 print:hidden">
                   <button
-                    onClick={() => setPdfTypeToShow(null)}
+                    onClick={() => {
+                      setPdfTypeToShow(null);
+                      if (cameDirectlyFromList) {
+                        setSelectedSession(null);
+                        setCameDirectlyFromList(false);
+                      }
+                    }}
                     className="px-5 py-2 rounded-xl border border-gray-300 hover:bg-gray-50 text-sm font-semibold transition"
                   >
                     FERMER L'APERÇU
@@ -747,27 +767,16 @@ export default function SessionsList({
                           setEmailSubject(`[Bénou Ré N°5] Invitation : Tenue du ${dateStr}`);
                           
                           const degreeFr = selectedSession.degree === 'Apprenti' ? '1er DEGRE' : selectedSession.degree === 'Compagnon' ? '2e DEGRE' : '3e DEGRE';
-                          const linesStr = customLines
-                            .filter(line => line.trim() !== '')
-                            .map((line, idx) => `  ${idx + 5}. ${line}`)
-                            .join('\n');
-                          
                           setEmailBody(
                             `Très Chère Sœur, Très Cher Frère,\n\n` +
-                            `Vous êtes invité(e) à participer aux travaux de notre Respectable Loge :\n\n` +
+                            `Vous êtes invité(e) à participer aux travaux de notre Respectable Loge Bénou Ré\n\n` +
                             `- Tenue : ${sessionNumber} TENUE REGULIERE au ${degreeFr}\n` +
                             `- Date : ${dateStr} à ${openingTime}\n` +
-                            `- Lieu : ${selectedSession.location || 'Temple de Saint-Pierre'}\n\n` +
-                            `Ordre du Jour :\n` +
-                            `  1. Ouverture des Travaux.\n` +
-                            `  2. Appel des FF et SS.\n` +
-                            `  3. Lecture de la planche tracée.\n` +
-                            `  4. Lecture de la correspondance.\n` +
-                            `${linesStr}\n` +
-                            `  ${5 + customLines.filter(line => line.trim() !== '').length}. Clôture des Travaux.\n\n` +
-                            `Agapes :\n${agapeText}\n\n` +
+                            `- Lieu : ${selectedSession.location || 'Temple Thérèse Eliseman à Saint-Pierre'}\n\n` +
+                            `Vous trouverez en pièce jointe à ce courriel l’ordre du jour.\n` +
+                            `Agapes :  ${agapeText}\n` +
                             `Contact : ${contactText}\n\n` +
-                            `Fraternellement,\n` +
+                            `Dans l’attente de partager ce moment avec vous, recevez nos salutations fraternelles.\n` +
                             `Le Secrétariat de la R∴ L∴ Bénou Ré N°5`
                           );
                         }}
@@ -1511,7 +1520,24 @@ export default function SessionsList({
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button 
-              onClick={isShowingEmargement ? () => setIsShowingEmargement(false) : (selectedSession || isEditing ? () => { setSelectedSession(null); setIsEditing(false); setIsShowingEmargement(false); } : onBack)}
+              onClick={() => {
+                if (cameDirectlyFromList) {
+                  setSelectedSession(null);
+                  setIsShowingEmargement(false);
+                  setPdfTypeToShow(null);
+                  setCameDirectlyFromList(false);
+                } else if (isShowingEmargement) {
+                  setIsShowingEmargement(false);
+                } else if (pdfTypeToShow) {
+                  setPdfTypeToShow(null);
+                } else if (selectedSession || isEditing) {
+                  setSelectedSession(null);
+                  setIsEditing(false);
+                  setIsShowingEmargement(false);
+                } else {
+                  onBack();
+                }
+              }}
               className="p-2 rounded-lg bg-teal-950/40 border border-teal-900/30 text-teal-400 hover:bg-teal-900/20 transition"
             >
               <ArrowLeft className="h-4 w-4" />
@@ -1848,7 +1874,7 @@ export default function SessionsList({
                   </div>
                   <p className="text-xs text-[#87A0A0]">
                     {selectedSession.isValidated
-                      ? 'Cette tenue a été officiellement validée. Le numéro de la tenue a été incrémenté dans le système.'
+                      ? 'Cette tenue a été officiellement validée. Le numéro de la tenue a été incrémenté dans le systeme.'
                       : 'Une fois planifiée, veuillez valider cette tenue. Cela incrémentera automatiquement le numéro de la tenue pour les prochaines planifications.'}
                   </p>
                 </div>
@@ -1869,6 +1895,15 @@ export default function SessionsList({
                   )}
                 </div>
               </div>
+            )}
+
+            {/* Google Drive Active Archiving Dashboard for Validated Tenue */}
+            {selectedSession.isValidated && (
+              <GoogleDriveArchivePanel 
+                session={selectedSession} 
+                members={members} 
+                visitors={visitors} 
+              />
             )}
 
             {/* Admin Document Generator block */}
@@ -2043,11 +2078,17 @@ export default function SessionsList({
                 </h3>
               </div>
               <button
-                onClick={() => setIsShowingEmargement(false)}
+                onClick={() => {
+                  setIsShowingEmargement(false);
+                  if (cameDirectlyFromList) {
+                    setSelectedSession(null);
+                    setCameDirectlyFromList(false);
+                  }
+                }}
                 className="px-4 py-2 rounded-xl bg-teal-950 border border-teal-800 text-teal-400 hover:bg-teal-900 text-xs font-bold transition flex items-center justify-center gap-1.5 self-start sm:self-auto"
               >
                 <ArrowLeft className="h-4 w-4" />
-                REVENIR AU DÉTAIL
+                {cameDirectlyFromList ? 'REVENIR AU CALENDRIER' : 'REVENIR AU DÉTAIL'}
               </button>
             </div>
 
@@ -2380,6 +2421,57 @@ export default function SessionsList({
                         →
                       </div>
                     </button>
+
+                    {/* Direct Actions row for Invitation, Émargement, Saisie du Tronc */}
+                    <div className="bg-black/20 border-t border-gray-800/40 px-5 py-3 flex flex-col sm:flex-row gap-2.5 sm:items-center justify-between text-xs">
+                      <span className="text-amber-500 font-mono text-[10px] uppercase tracking-wider font-bold">
+                        Actions Directes :
+                      </span>
+                      <div className="flex flex-wrap gap-2">
+                        {isSecOrVM && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedSession(session);
+                              setPdfTypeToShow('invitation');
+                              setCameDirectlyFromList(true);
+                            }}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#0C7A7A]/20 hover:bg-[#0C7A7A]/40 border border-[#0C7A7A]/30 text-[#0C7A7A] hover:text-teal-400 text-[10px] font-bold tracking-wider uppercase transition shadow-sm cursor-pointer"
+                          >
+                            <Mail className="h-3 w-3 text-teal-400" />
+                            Invitation
+                          </button>
+                        )}
+                        
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedSession(session);
+                            setIsShowingEmargement(true);
+                            setCameDirectlyFromList(true);
+                          }}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/5 hover:bg-amber-500/15 border border-amber-500/20 text-amber-500 hover:text-amber-400 text-[10px] font-bold tracking-wider uppercase transition shadow-sm cursor-pointer"
+                        >
+                          <FileText className="h-3 w-3 text-amber-500" />
+                          Émargement
+                        </button>
+
+                        {isSecOrVM && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedSession(session);
+                              setIsShowingEmargement(true);
+                              setCameDirectlyFromList(true);
+                            }}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/5 hover:bg-amber-500/15 border border-amber-500/20 text-amber-500 hover:text-amber-400 text-[10px] font-bold tracking-wider uppercase transition shadow-sm cursor-pointer"
+                          >
+                            <Coins className="h-3 w-3 text-amber-500" />
+                            Saisie du Tronc
+                          </button>
+                        )}
+                      </div>
+                    </div>
 
                     {/* Attendance quick control footer bar */}
                     <div className="bg-black/15 border-t border-gray-800/40 px-5 py-3 flex items-center justify-between text-xs">
